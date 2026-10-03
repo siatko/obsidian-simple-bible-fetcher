@@ -5,12 +5,11 @@ import {
   Notice,
   Plugin,
   PluginSettingTab,
-  Setting,
+  SettingDefinitionItem,
 } from "obsidian";
 import {
   BibleSettings,
   DEFAULT_SETTINGS,
-  QuoteStyle,
   fetchBibleQuotes,
   listLanguages,
   listTranslations,
@@ -104,121 +103,101 @@ class SimpleBibleFetcherSettingTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
-  display(): void {
-    void this.renderSettings();
-  }
-
-  private async renderSettings(): Promise<void> {
-    const { containerEl } = this;
-    containerEl.empty();
-    new Setting(containerEl).setName("Simple Bible Fetcher").setHeading();
-
-    const languages = await listLanguages();
-    const languageOptions =
-      languages.length > 0
-        ? languages
-        : [
-            { key: "de", label: "German" },
-            { key: "en", label: "English" },
-          ];
-
-    new Setting(containerEl)
-      .setName("Language")
-      .setDesc(
-        "Filters the translations below and recognizes book names. German and English also accept common abbreviations."
-      )
-      .addDropdown((dropdown) => {
-        for (const option of languageOptions) {
-          dropdown.addOption(option.key, option.label);
-        }
-        if (
-          !languageOptions.some(
-            (option) => option.key === this.plugin.settings.language
-          )
-        ) {
-          dropdown.addOption(
-            this.plugin.settings.language,
-            this.plugin.settings.language
-          );
-        }
-        dropdown
-          .setValue(this.plugin.settings.language)
-          .onChange(async (value) => {
-            this.plugin.settings.language = value;
-            const options = await listTranslations(value);
-            if (
-              !options.some((t) => t.short === this.plugin.settings.translation)
-            ) {
-              const fallback =
-                options.find((t) => t.short === DEFAULT_TRANSLATION[value])
-                  ?.short ?? options[0]?.short;
-              if (fallback) this.plugin.settings.translation = fallback;
+  getSettingDefinitions(): SettingDefinitionItem[] {
+    return [
+      {
+        name: "Language",
+        desc: "Filters the translations below and recognizes book names. German and English also accept common abbreviations.",
+        render: (setting) => {
+          setting.addDropdown(async (dropdown) => {
+            const languages = await listLanguages();
+            const options =
+              languages.length > 0
+                ? languages
+                : [
+                    { key: "de", label: "German" },
+                    { key: "en", label: "English" },
+                  ];
+            for (const option of options) {
+              dropdown.addOption(option.key, option.label);
             }
-            await this.plugin.saveSettings();
-            void this.renderSettings();
+            if (!options.some((o) => o.key === this.plugin.settings.language)) {
+              dropdown.addOption(
+                this.plugin.settings.language,
+                this.plugin.settings.language
+              );
+            }
+            dropdown
+              .setValue(this.plugin.settings.language)
+              .onChange(async (value) => {
+                this.plugin.settings.language = value;
+                const translations = await listTranslations(value);
+                if (
+                  !translations.some(
+                    (t) => t.short === this.plugin.settings.translation
+                  )
+                ) {
+                  const fallback =
+                    translations.find(
+                      (t) => t.short === DEFAULT_TRANSLATION[value]
+                    )?.short ?? translations[0]?.short;
+                  if (fallback) this.plugin.settings.translation = fallback;
+                }
+                await this.plugin.saveSettings();
+                this.update();
+              });
           });
-      });
-
-    const translations = await listTranslations(this.plugin.settings.language);
-    const translationSetting = new Setting(containerEl).setName("Translation");
-
-    if (translations.length > 0) {
-      translationSetting.setDesc("bolls.life translation.");
-      translationSetting.addDropdown((dropdown) => {
-        for (const translation of translations) {
-          dropdown.addOption(
-            translation.short,
-            `${translation.short} – ${translation.full}`
-          );
-        }
-        dropdown
-          .setValue(this.plugin.settings.translation)
-          .onChange(async (value) => {
-            this.plugin.settings.translation = value;
-            await this.plugin.saveSettings();
+        },
+      },
+      {
+        name: "Translation",
+        desc: "bolls.life translation.",
+        render: (setting) => {
+          setting.addDropdown(async (dropdown) => {
+            const translations = await listTranslations(
+              this.plugin.settings.language
+            );
+            if (translations.length === 0) {
+              dropdown.addOption(
+                this.plugin.settings.translation,
+                this.plugin.settings.translation
+              );
+            } else {
+              for (const translation of translations) {
+                dropdown.addOption(
+                  translation.short,
+                  `${translation.short} - ${translation.full}`
+                );
+              }
+            }
+            dropdown
+              .setValue(this.plugin.settings.translation)
+              .onChange(async (value) => {
+                this.plugin.settings.translation = value;
+                await this.plugin.saveSettings();
+              });
           });
-      });
-    } else {
-      translationSetting
-        .setDesc(
-          "Could not load the translation list (offline?). Enter a code, e.g. S00, LUT."
-        )
-        .addText((text) =>
-          text
-            .setPlaceholder(this.plugin.settings.translation)
-            .setValue(this.plugin.settings.translation)
-            .onChange(async (value) => {
-              this.plugin.settings.translation = value.trim();
-              await this.plugin.saveSettings();
-            })
-        );
-    }
-
-    new Setting(containerEl)
-      .setName("Format")
-      .setDesc("How the verses are inserted.")
-      .addDropdown((dropdown) =>
-        dropdown
-          .addOption("bold", "Blockquote, bold verse number")
-          .addOption("quote-each", "One blockquote per verse")
-          .addOption("prose", "Blockquote, running text")
-          .setValue(this.plugin.settings.style)
-          .onChange(async (value) => {
-            this.plugin.settings.style = value as QuoteStyle;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Source link")
-      .setDesc("Make the heading itself a bolls.life link.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.includeSourceLink)
-          .onChange(async (value) => {
-            this.plugin.settings.includeSourceLink = value;
-            await this.plugin.saveSettings();
-          })
-      );
+        },
+      },
+      {
+        name: "Format",
+        desc: "How the verses are inserted.",
+        control: {
+          type: "dropdown",
+          key: "style",
+          defaultValue: "bold",
+          options: {
+            bold: "Blockquote, bold verse number",
+            "quote-each": "One blockquote per verse",
+            prose: "Blockquote, running text",
+          },
+        },
+      },
+      {
+        name: "Source link",
+        desc: "Make the heading itself a bolls.life link.",
+        control: { type: "toggle", key: "includeSourceLink" },
+      },
+    ];
   }
 }
