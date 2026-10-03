@@ -14,7 +14,7 @@ as a blockquote, one verse per line with a bold verse number.
 > Leben hat.
 ```
 
-![Rendered output in Obsidian](images/output.png)
+![Rendered output in Obsidian](./images/output.png)
 
 ## Features
 
@@ -44,7 +44,7 @@ German and English additionally understand common abbreviations
    **Settings → Hotkeys**.
 3. Enter a reference and press `Enter`.
 
-![Bible reference dialog](images/dialog.png)
+![Bible reference dialog](./images/dialog.png)
 
 ### Reference syntax
 
