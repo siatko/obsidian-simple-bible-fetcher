@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "minAppVersion": "1.5.7",
   "description": "Insert Bible verses from bolls.life as Markdown quotes.",
-  "author": "skosina",
+  "author": "siatko",
   "authorUrl": "https://github.com/siatko",
   "isDesktopOnly": false
 }

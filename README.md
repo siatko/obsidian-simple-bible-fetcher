@@ -4,7 +4,7 @@ An [Obsidian](https://obsidian.md) plugin that inserts Bible passages from the
 free [bolls.life](https://bolls.life) API as Markdown quotes.
 
 Type a reference, pick a translation, and the passage is inserted at the cursor
-as a blockquote — one verse per line with a bold verse number.
+as a blockquote, one verse per line with a bold verse number.
 
 ```markdown
 > **Das Evangelium nach Johannes 3,16** (Schlachter 2000)
