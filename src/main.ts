@@ -10,13 +10,13 @@ import {
 import {
   BibleSettings,
   DEFAULT_SETTINGS,
-  Language,
   QuoteStyle,
   fetchBibleQuotes,
+  listLanguages,
   listTranslations,
 } from "./bible";
 
-const DEFAULT_TRANSLATION: Record<Language, string> = {
+const DEFAULT_TRANSLATION: Record<string, string> = {
   de: "S00",
   en: "BSB",
 };
@@ -108,32 +108,51 @@ class SimpleBibleFetcherSettingTab extends PluginSettingTab {
     containerEl.empty();
     containerEl.createEl("h2", { text: "Simple Bible Fetcher" });
 
+    const languages = await listLanguages();
+    const languageOptions =
+      languages.length > 0
+        ? languages
+        : [
+            { key: "de", label: "German" },
+            { key: "en", label: "English" },
+          ];
+
     new Setting(containerEl)
       .setName("Language")
       .setDesc(
-        "Book name aliases and the translations shown below follow this language."
+        "Filters the translations below and recognizes book names. German and English also accept common abbreviations."
       )
-      .addDropdown((dropdown) =>
+      .addDropdown((dropdown) => {
+        for (const option of languageOptions) {
+          dropdown.addOption(option.key, option.label);
+        }
+        if (
+          !languageOptions.some(
+            (option) => option.key === this.plugin.settings.language
+          )
+        ) {
+          dropdown.addOption(
+            this.plugin.settings.language,
+            this.plugin.settings.language
+          );
+        }
         dropdown
-          .addOption("de", "German")
-          .addOption("en", "English")
           .setValue(this.plugin.settings.language)
           .onChange(async (value) => {
-            const language = value as Language;
-            this.plugin.settings.language = language;
-            const options = await listTranslations(language);
+            this.plugin.settings.language = value;
+            const options = await listTranslations(value);
             if (
               !options.some((t) => t.short === this.plugin.settings.translation)
             ) {
               const fallback =
-                options.find((t) => t.short === DEFAULT_TRANSLATION[language])
+                options.find((t) => t.short === DEFAULT_TRANSLATION[value])
                   ?.short ?? options[0]?.short;
               if (fallback) this.plugin.settings.translation = fallback;
             }
             await this.plugin.saveSettings();
             void this.display();
-          })
-      );
+          });
+      });
 
     const translations = await listTranslations(this.plugin.settings.language);
     const translationSetting = new Setting(containerEl).setName("Translation");

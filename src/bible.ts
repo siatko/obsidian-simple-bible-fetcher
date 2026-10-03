@@ -11,7 +11,7 @@ export type QuoteStyle = "bold" | "quote-each" | "prose";
 
 export interface BibleSettings {
   translation: string;
-  language: Language;
+  language: string;
   style: QuoteStyle;
   includeSourceLink: boolean;
 }
@@ -159,10 +159,18 @@ interface TranslationGroup {
 
 let translationGroupsCache: TranslationGroup[] | null = null;
 
-const LANGUAGE_GROUP_PREFIX: Record<Language, string> = {
-  de: "german",
-  en: "english",
-};
+function aliasLanguage(language: string): Language | null {
+  const value = language.toLowerCase();
+  if (value === "de" || value.startsWith("german")) return "de";
+  if (value === "en" || value.startsWith("english")) return "en";
+  return null;
+}
+
+function groupMatches(groupLanguage: string | undefined, language: string): boolean {
+  if (!groupLanguage) return false;
+  const alias = aliasLanguage(language);
+  return alias ? aliasLanguage(groupLanguage) === alias : groupLanguage === language;
+}
 
 async function getJson(url: string): Promise<any> {
   try {
@@ -227,13 +235,12 @@ export interface TranslationOption {
 }
 
 export async function listTranslations(
-  language: Language
+  language: string
 ): Promise<TranslationOption[]> {
   const groups = await getTranslationGroups();
-  const prefix = LANGUAGE_GROUP_PREFIX[language];
   const options: TranslationOption[] = [];
   for (const group of groups) {
-    if (!group.language?.toLowerCase().startsWith(prefix)) continue;
+    if (!groupMatches(group.language, language)) continue;
     for (const entry of group.translations ?? []) {
       options.push({ short: entry.short_name, full: entry.full_name });
     }
@@ -241,61 +248,80 @@ export async function listTranslations(
   return options;
 }
 
-function standardBooks(language: Language): string[] {
-  return BOOK_NAMES[language];
+export interface LanguageOption {
+  key: string;
+  label: string;
 }
 
-function displayBook(number: number, language: Language): string {
-  return standardBooks(language)[number - 1] ?? String(number);
+export async function listLanguages(): Promise<LanguageOption[]> {
+  const groups = await getTranslationGroups();
+  return groups
+    .filter((group) => group.language)
+    .map((group) => ({
+      key: aliasLanguage(group.language) ?? group.language,
+      label: group.language,
+    }));
+}
+
+function standardBooks(language: string): string[] | null {
+  const alias = aliasLanguage(language);
+  return alias ? BOOK_NAMES[alias] : null;
+}
+
+function displayBook(number: number, language: string): string {
+  const books = standardBooks(language);
+  return books?.[number - 1] ?? String(number);
 }
 
 function translationBook(
   number: number,
   books: string[],
-  language: Language
+  language: string
 ): string {
   return books[number - 1] ?? displayBook(number, language);
 }
 
-function resolveBookNumber(name: string, language: Language): number | null {
-  const normalised = normalize(name);
-  const normalisedBooks = standardBooks(language).map(normalize);
-  const count = normalisedBooks.length;
-
-  if (/^\d+$/.test(normalised)) {
-    const n = parseInt(normalised, 10);
-    if (n >= 1 && n <= count) return n;
-  }
-
-  const alias = BOOK_ALIASES[language][normalised];
-  if (alias !== undefined && alias >= 1 && alias <= count) return alias;
-
-  const matches: number[] = [];
-  normalisedBooks.forEach((norm, index) => {
-    if (norm.startsWith(normalised)) matches.push(index + 1);
+function matchInList(normalised: string, names: string[]): number | null {
+  const prefix: number[] = [];
+  names.forEach((name, index) => {
+    if (name.startsWith(normalised)) prefix.push(index + 1);
   });
-  if (matches.length === 1) return matches[0];
+  if (prefix.length === 1) return prefix[0];
+  if (prefix.length > 1) return null;
 
-  if (matches.length === 0) {
-    const subs: number[] = [];
-    normalisedBooks.forEach((norm, index) => {
-      if (norm.includes(normalised)) subs.push(index + 1);
-    });
-    return subs.length === 1 ? subs[0] : null;
-  }
-
-  const subs = matches.filter((i) => normalisedBooks[i - 1].includes(normalised));
+  const subs: number[] = [];
+  names.forEach((name, index) => {
+    if (name.includes(normalised)) subs.push(index + 1);
+  });
   return subs.length === 1 ? subs[0] : null;
 }
 
 function resolveBook(
   name: string,
   books: string[],
-  language: Language
+  language: string
 ): number | null {
-  const number = resolveBookNumber(name, language);
-  if (!number) return null;
-  return number <= books.length ? number : null;
+  const normalised = normalize(name);
+  const count = books.length;
+
+  if (/^\d+$/.test(normalised)) {
+    const n = parseInt(normalised, 10);
+    if (n >= 1 && n <= count) return n;
+  }
+
+  const alias = aliasLanguage(language);
+  if (alias) {
+    const hit = BOOK_ALIASES[alias][normalised];
+    if (hit !== undefined && hit >= 1 && hit <= count) return hit;
+    const byCanonical = matchInList(
+      normalised,
+      BOOK_NAMES[alias].map(normalize)
+    );
+    if (byCanonical && byCanonical <= count) return byCanonical;
+  }
+
+  const byTranslation = matchInList(normalised, books.map(normalize));
+  return byTranslation && byTranslation <= count ? byTranslation : null;
 }
 
 export type VerseSpec = Array<[number, number]>;

@@ -14,15 +14,27 @@ as a blockquote, one verse per line with a bold verse number.
 > Leben hat.
 ```
 
+![Rendered output in Obsidian](images/output.png)
+
 ## Features
 
 - Insert passages via a command / hotkey.
 - Reference parsing with book names, common abbreviations and book numbers
   (`Johannes 3,16`, `Joh 3,16-18`, `Ps 23`, `43 3,16`, `John 3:16`).
-- German and English alias sets (independent of the translation's language).
 - Multiple references at once, separated by `;` (`Joh 3,16; Ps 23`).
 - Three output formats and an optional source link.
-- Translation chosen from the full bolls.life catalogue.
+- Every language offered by bolls.life, with the translation list and
+  book-name matching following the chosen language.
+
+## Supported languages
+
+Every language available on bolls.life can be selected. The translation list
+and book-name matching follow the chosen language, so you can type book names
+as that translation writes them (for example `Juan`, `Selon Jean` or `João`).
+Books can always be given by their number (1–66).
+
+German and English additionally understand common abbreviations
+(`Joh`, `1 Mos`, `Psalm`, `John`), independently of the selected translation.
 
 ## Usage
 
@@ -31,6 +43,8 @@ as a blockquote, one verse per line with a bold verse number.
    palette (`Ctrl/Cmd+P`), or assign it a hotkey under
    **Settings → Hotkeys**.
 3. Enter a reference and press `Enter`.
+
+![Bible reference dialog](images/dialog.png)
 
 ### Reference syntax
 
@@ -52,7 +66,7 @@ the book name as the chosen translation writes it.
 
 | Setting     | Description                                              |
 | ----------- | -------------------------------------------------------- |
-| Language    | Alias set used for parsing and the translations offered (`German`/`English`). |
+| Language    | Translation language, and the book names recognized while typing. |
 | Translation | bolls.life translation, filtered to the selected language (e.g. `S00`, `LUT`; `BSB`, `WEB`). |
 | Format      | `Blockquote, bold verse number`, `One blockquote per verse`, or `Blockquote, running text`. |
 | Source link | Make the heading itself link to the passage on bolls.life. |
