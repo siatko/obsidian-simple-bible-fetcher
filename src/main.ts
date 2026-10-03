@@ -87,7 +87,8 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
   }
 
   async loadSettings(): Promise<void> {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const stored = ((await this.loadData()) ?? {}) as Partial<BibleSettings>;
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, stored);
   }
 
   async saveSettings(): Promise<void> {
@@ -103,10 +104,14 @@ class SimpleBibleFetcherSettingTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
-  async display(): Promise<void> {
+  display(): void {
+    void this.renderSettings();
+  }
+
+  private async renderSettings(): Promise<void> {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Simple Bible Fetcher" });
+    new Setting(containerEl).setName("Simple Bible Fetcher").setHeading();
 
     const languages = await listLanguages();
     const languageOptions =
@@ -150,7 +155,7 @@ class SimpleBibleFetcherSettingTab extends PluginSettingTab {
               if (fallback) this.plugin.settings.translation = fallback;
             }
             await this.plugin.saveSettings();
-            void this.display();
+            void this.renderSettings();
           });
       });
 

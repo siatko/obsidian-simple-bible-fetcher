@@ -1,6 +1,6 @@
 {
   "name": "obsidian-simple-bible-fetcher",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Insert Bible verses from bolls.life as Markdown quotes.",
   "main": "main.js",
   "scripts": {
@@ -16,7 +16,6 @@
   "license": "GPL-3.0-or-later",
   "devDependencies": {
     "@types/node": "^20.11.0",
-    "builtin-modules": "^3.3.0",
     "esbuild": "^0.20.0",
     "obsidian": "^1.5.7",
     "typescript": "^5.4.0"

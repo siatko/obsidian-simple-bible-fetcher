@@ -157,6 +157,15 @@ interface TranslationGroup {
   translations?: TranslationEntry[];
 }
 
+interface RawBook {
+  name: string;
+}
+
+interface RawVerse {
+  verse: number;
+  text: string;
+}
+
 let translationGroupsCache: TranslationGroup[] | null = null;
 
 function aliasLanguage(language: string): Language | null {
@@ -172,11 +181,11 @@ function groupMatches(groupLanguage: string | undefined, language: string): bool
   return alias ? aliasLanguage(groupLanguage) === alias : groupLanguage === language;
 }
 
-async function getJson(url: string): Promise<any> {
+async function getJson(url: string): Promise<unknown> {
   try {
     const response = await requestUrl({ url });
     if (response.status < 200 || response.status >= 300) return null;
-    return response.json;
+    return response.json as unknown;
   } catch {
     return null;
   }
@@ -191,7 +200,7 @@ function normalize(input: string): string {
   return input
     .toLowerCase()
     .trim()
-    .replace(/[\s.\[\]]/g, "")
+    .replace(/[\s.]/g, "")
     .split("")
     .map((char) => map[char] ?? char)
     .join("");
@@ -200,11 +209,11 @@ function normalize(input: string): string {
 async function getBooks(translation: string): Promise<string[]> {
   const cached = booksCache.get(translation);
   if (cached) return cached;
-  const data = await getJson(
+  const data = (await getJson(
     `${API_BASE}/get-books/${encodeURIComponent(translation)}/`
-  );
+  )) as RawBook[] | null;
   const books: string[] = Array.isArray(data)
-    ? data.map((book: any) => book.name)
+    ? data.map((book) => book.name)
     : [];
   booksCache.set(translation, books);
   return books;
@@ -212,9 +221,9 @@ async function getBooks(translation: string): Promise<string[]> {
 
 async function getTranslationGroups(): Promise<TranslationGroup[]> {
   if (translationGroupsCache) return translationGroupsCache;
-  const languages = await getJson(
+  const languages = (await getJson(
     `${API_BASE}/static/bolls/app/views/languages.json`
-  );
+  )) as TranslationGroup[] | null;
   translationGroupsCache = Array.isArray(languages) ? languages : [];
   return translationGroupsCache;
 }
@@ -397,20 +406,21 @@ async function fetchPassage(
   chapter: number,
   spec: VerseSpec | null
 ): Promise<Verse[]> {
-  const verses = await getJson(
+  const data = (await getJson(
     `${API_BASE}/get-chapter/${encodeURIComponent(
       translation
     )}/${encodeURIComponent(book)}/${chapter}/`
-  );
-  if (!Array.isArray(verses)) {
+  )) as RawVerse[] | null;
+  if (!Array.isArray(data)) {
     throw new Error(`Could not load ${book} ${chapter} (${translation}).`);
   }
+  const verses = data;
 
   let passage: Verse[];
   if (!spec) {
     passage = verses
-      .filter((verse: any) => verse.verse)
-      .map((verse: any) => ({
+      .filter((verse) => verse.verse)
+      .map((verse) => ({
         number: verse.verse,
         text: cleanText(verse.text),
       }));
