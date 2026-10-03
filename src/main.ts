@@ -1,0 +1,200 @@
+import {
+  App,
+  Editor,
+  Modal,
+  Notice,
+  Plugin,
+  PluginSettingTab,
+  Setting,
+} from "obsidian";
+import {
+  BibleSettings,
+  DEFAULT_SETTINGS,
+  Language,
+  QuoteStyle,
+  fetchBibleQuotes,
+  listTranslations,
+} from "./bible";
+
+const DEFAULT_TRANSLATION: Record<Language, string> = {
+  de: "S00",
+  en: "BSB",
+};
+
+class ReferenceModal extends Modal {
+  private onSubmit: (reference: string) => void;
+
+  constructor(app: App, onSubmit: (reference: string) => void) {
+    super(app);
+    this.onSubmit = onSubmit;
+  }
+
+  onOpen(): void {
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: "Bible reference" });
+
+    const input = contentEl.createEl("input", {
+      type: "text",
+      placeholder: "e.g. John 3:16 (separate multiple with ;)",
+    });
+    input.addClass("simple-bible-fetcher-input");
+    input.focus();
+
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        const value = input.value.trim();
+        this.close();
+        if (value) this.onSubmit(value);
+      }
+    });
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+  }
+}
+
+export default class SimpleBibleFetcherPlugin extends Plugin {
+  settings: BibleSettings;
+
+  async onload(): Promise<void> {
+    await this.loadSettings();
+
+    this.addCommand({
+      id: "insert-bible-quote",
+      name: "Insert Bible quote",
+      editorCallback: (editor: Editor) => this.promptAndInsert(editor),
+    });
+
+    this.addSettingTab(new SimpleBibleFetcherSettingTab(this.app, this));
+  }
+
+  private promptAndInsert(editor: Editor): void {
+    new ReferenceModal(this.app, (reference) => {
+      void this.insert(editor, reference);
+    }).open();
+  }
+
+  private async insert(editor: Editor, reference: string): Promise<void> {
+    try {
+      const quote = await fetchBibleQuotes(reference, this.settings);
+      editor.replaceSelection(quote);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      new Notice(`Simple Bible Fetcher: ${message}`, 6000);
+    }
+  }
+
+  async loadSettings(): Promise<void> {
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+  }
+
+  async saveSettings(): Promise<void> {
+    await this.saveData(this.settings);
+  }
+}
+
+class SimpleBibleFetcherSettingTab extends PluginSettingTab {
+  plugin: SimpleBibleFetcherPlugin;
+
+  constructor(app: App, plugin: SimpleBibleFetcherPlugin) {
+    super(app, plugin);
+    this.plugin = plugin;
+  }
+
+  async display(): Promise<void> {
+    const { containerEl } = this;
+    containerEl.empty();
+    containerEl.createEl("h2", { text: "Simple Bible Fetcher" });
+
+    new Setting(containerEl)
+      .setName("Language")
+      .setDesc(
+        "Book name aliases and the translations shown below follow this language."
+      )
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("de", "German")
+          .addOption("en", "English")
+          .setValue(this.plugin.settings.language)
+          .onChange(async (value) => {
+            const language = value as Language;
+            this.plugin.settings.language = language;
+            const options = await listTranslations(language);
+            if (
+              !options.some((t) => t.short === this.plugin.settings.translation)
+            ) {
+              const fallback =
+                options.find((t) => t.short === DEFAULT_TRANSLATION[language])
+                  ?.short ?? options[0]?.short;
+              if (fallback) this.plugin.settings.translation = fallback;
+            }
+            await this.plugin.saveSettings();
+            void this.display();
+          })
+      );
+
+    const translations = await listTranslations(this.plugin.settings.language);
+    const translationSetting = new Setting(containerEl).setName("Translation");
+
+    if (translations.length > 0) {
+      translationSetting.setDesc("bolls.life translation.");
+      translationSetting.addDropdown((dropdown) => {
+        for (const translation of translations) {
+          dropdown.addOption(
+            translation.short,
+            `${translation.short} – ${translation.full}`
+          );
+        }
+        dropdown
+          .setValue(this.plugin.settings.translation)
+          .onChange(async (value) => {
+            this.plugin.settings.translation = value;
+            await this.plugin.saveSettings();
+          });
+      });
+    } else {
+      translationSetting
+        .setDesc(
+          "Could not load the translation list (offline?). Enter a code, e.g. S00, LUT."
+        )
+        .addText((text) =>
+          text
+            .setPlaceholder(this.plugin.settings.translation)
+            .setValue(this.plugin.settings.translation)
+            .onChange(async (value) => {
+              this.plugin.settings.translation = value.trim();
+              await this.plugin.saveSettings();
+            })
+        );
+    }
+
+    new Setting(containerEl)
+      .setName("Format")
+      .setDesc("How the verses are inserted.")
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("bold", "Blockquote, bold verse number")
+          .addOption("quote-each", "One blockquote per verse")
+          .addOption("prose", "Blockquote, running text")
+          .setValue(this.plugin.settings.style)
+          .onChange(async (value) => {
+            this.plugin.settings.style = value as QuoteStyle;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Source link")
+      .setDesc("Make the heading itself a bolls.life link.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.includeSourceLink)
+          .onChange(async (value) => {
+            this.plugin.settings.includeSourceLink = value;
+            await this.plugin.saveSettings();
+          })
+      );
+  }
+}

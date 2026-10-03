@@ -1,0 +1,11 @@
+# Obsidian
+data.json
+
+# Build output (released as a GitHub asset, not committed)
+main.js
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
