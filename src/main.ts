@@ -194,6 +194,11 @@ class SimpleBibleFetcherSettingTab extends PluginSettingTab {
         },
       },
       {
+        name: "Footnotes",
+        desc: "Render the source's footnotes as Markdown footnotes (with the text appended below the quote), or strip the markers.",
+        control: { type: "toggle", key: "footnotes" },
+      },
+      {
         name: "Source link",
         desc: "Make the heading itself a bolls.life link.",
         control: { type: "toggle", key: "includeSourceLink" },

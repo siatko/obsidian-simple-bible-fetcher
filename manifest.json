@@ -1,7 +1,7 @@
 {
   "id": "simple-bible-fetcher",
   "name": "Simple Bible Fetcher",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "minAppVersion": "1.13.0",
   "description": "Insert Bible verses from bolls.life as Markdown quotes.",
   "author": "siatko",

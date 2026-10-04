@@ -5,6 +5,11 @@ export interface Verse {
   text: string;
 }
 
+export interface Footnote {
+  label: string;
+  text: string;
+}
+
 export type Language = "de" | "en";
 
 export type QuoteStyle = "bold" | "quote-each" | "prose";
@@ -14,6 +19,7 @@ export interface BibleSettings {
   language: string;
   style: QuoteStyle;
   includeSourceLink: boolean;
+  footnotes: boolean;
 }
 
 export const DEFAULT_SETTINGS: BibleSettings = {
@@ -21,6 +27,7 @@ export const DEFAULT_SETTINGS: BibleSettings = {
   language: "de",
   style: "bold",
   includeSourceLink: false,
+  footnotes: true,
 };
 
 const API_BASE = "https://bolls.life";
@@ -164,6 +171,7 @@ interface RawBook {
 interface RawVerse {
   verse: number;
   text: string;
+  comment?: string;
 }
 
 let translationGroupsCache: TranslationGroup[] | null = null;
@@ -380,10 +388,82 @@ function cleanText(text: string | null | undefined): string {
     .replace(/<\/?i>/g, "")
     .replace(/<[^>]+>/g, "")
     .replace(/\[\d+\]/g, "")
+    .replace(/\[/g, "\\[")
+    .replace(/\]/g, "\\]")
     .replace(/[\u2009\u00a0]/g, " ")
     .replace(/([.!?]["»«„“”']?)([A-ZÄÖÜ])/g, "$1 $2")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+class FootnoteRegistry {
+  private count = 0;
+  private items: Footnote[] = [];
+
+  add(text: string): string {
+    this.count += 1;
+    const label = String(this.count);
+    this.items.push({ label, text });
+    return label;
+  }
+
+  all(): Footnote[] {
+    return this.items;
+  }
+}
+
+function cleanFootnote(text: string): string {
+  return text
+    .replace(
+      /<a href=['"]([^'"]+)['"]>((?:.|\n)*?)<\/a>/g,
+      (_match, href: string, label: string) => {
+        const url = /^https?:\/\//.test(href) ? href : `${API_BASE}${href}`;
+        return `[${label}](${url})`;
+      }
+    )
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/[\u2009\u00a0]/g, " ")
+    .replace(/([.!?])([A-ZÄÖÜ])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseComment(comment: string | undefined): Map<number, string> {
+  const bodies = new Map<number, string>();
+  if (!comment) return bodies;
+  const segments = comment.split(/(?=\u2009?\[\d+\])/);
+  for (const segment of segments) {
+    const match = segment.match(/^\u2009?\[(\d+)\]\s*([\s\S]*)$/);
+    if (!match) continue;
+    const number = parseInt(match[1], 10);
+    const body = cleanFootnote(match[2]);
+    if (body) bodies.set(number, body);
+  }
+  return bodies;
+}
+
+const FOOTNOTE_TOKEN = "\uE000";
+
+function attachFootnotes(
+  rawText: string,
+  comment: string | undefined,
+  registry: FootnoteRegistry,
+  includeFootnotes: boolean
+): string {
+  if (!includeFootnotes) return cleanText(rawText);
+  const bodies = parseComment(comment);
+  const marked = rawText.replace(/<f>(?:.|\n)*?<\/f>/g, (match) => {
+    const marker = match.match(/\[(\d+)\]/);
+    if (!marker) return "";
+    const body = bodies.get(parseInt(marker[1], 10));
+    if (!body) return "";
+    return `${FOOTNOTE_TOKEN}${registry.add(body)}${FOOTNOTE_TOKEN}`;
+  });
+  return cleanText(marked).replace(
+    new RegExp(`${FOOTNOTE_TOKEN}([^${FOOTNOTE_TOKEN}]+)${FOOTNOTE_TOKEN}`, "g"),
+    "[^$1]"
+  );
 }
 
 function formatRange(range: [number, number]): string {
@@ -405,7 +485,9 @@ async function fetchPassage(
   translation: string,
   book: string,
   chapter: number,
-  spec: VerseSpec | null
+  spec: VerseSpec | null,
+  registry: FootnoteRegistry,
+  includeFootnotes: boolean
 ): Promise<Verse[]> {
   const data = (await getJson(
     `${API_BASE}/get-chapter/${encodeURIComponent(
@@ -416,24 +498,20 @@ async function fetchPassage(
     throw new Error(`Could not load ${book} ${chapter} (${translation}).`);
   }
   const verses = data;
+  const toVerse = (verse: RawVerse): Verse => ({
+    number: verse.verse,
+    text: attachFootnotes(verse.text, verse.comment, registry, includeFootnotes),
+  });
 
   let passage: Verse[];
   if (!spec) {
-    passage = verses
-      .filter((verse) => verse.verse)
-      .map((verse) => ({
-        number: verse.verse,
-        text: cleanText(verse.text),
-      }));
+    passage = verses.filter((verse) => verse.verse).map(toVerse);
   } else {
     passage = [];
     for (const [first, last] of spec) {
       for (const verse of verses) {
         if (verse.verse && verse.verse >= first && verse.verse <= last) {
-          passage.push({
-            number: verse.verse,
-            text: cleanText(verse.text),
-          });
+          passage.push(toVerse(verse));
         }
       }
     }
@@ -452,6 +530,7 @@ async function fetchPassage(
 export interface RenderResult {
   heading: string;
   quote: string;
+  footnotes: Footnote[];
 }
 
 interface Passage {
@@ -499,7 +578,8 @@ function renderPassage(passage: Passage, settings: BibleSettings): string {
 
 async function buildPassage(
   reference: string,
-  settings: BibleSettings
+  settings: BibleSettings,
+  registry: FootnoteRegistry
 ): Promise<Passage> {
   const parsed = parseReference(reference);
   if (!parsed) {
@@ -523,7 +603,9 @@ async function buildPassage(
     translation,
     bookName,
     parsed.chapter,
-    parsed.spec
+    parsed.spec,
+    registry,
+    settings.footnotes
   );
   const name = await translationName(translation);
 
@@ -539,12 +621,14 @@ async function buildPassage(
 
 export async function fetchBibleQuote(
   reference: string,
-  settings: BibleSettings
+  settings: BibleSettings,
+  registry: FootnoteRegistry = new FootnoteRegistry()
 ): Promise<RenderResult> {
-  const passage = await buildPassage(reference, settings);
+  const passage = await buildPassage(reference, settings, registry);
   return {
     heading: `**${passage.referenceLabel}** (${passage.translationName})`,
     quote: renderPassage(passage, settings),
+    footnotes: registry.all(),
   };
 }
 
@@ -563,10 +647,18 @@ export async function fetchBibleQuotes(
   if (references.length === 0) {
     throw new Error("No reference given.");
   }
+  const registry = new FootnoteRegistry();
   const rendered: string[] = [];
   for (const reference of references) {
-    const { quote } = await fetchBibleQuote(reference, settings);
+    const { quote } = await fetchBibleQuote(reference, settings, registry);
     rendered.push(quote);
   }
-  return rendered.join("\n\n");
+  let output = rendered.join("\n\n");
+  const footnotes = registry.all();
+  if (footnotes.length > 0) {
+    output +=
+      "\n\n" +
+      footnotes.map((footnote) => `[^${footnote.label}]: ${footnote.text}`).join("\n");
+  }
+  return output;
 }
