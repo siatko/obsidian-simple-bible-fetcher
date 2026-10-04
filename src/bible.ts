@@ -1,4 +1,11 @@
 import { requestUrl } from "obsidian";
+import type { JsonCache } from "./cache";
+
+let cache: JsonCache | null = null;
+
+export function setBibleCache(next: JsonCache | null): void {
+  cache = next;
+}
 
 export interface Verse {
   number: number;
@@ -12,7 +19,7 @@ export interface Footnote {
 
 export type Language = "de" | "en";
 
-export type QuoteStyle = "bold" | "quote-each" | "prose";
+export type QuoteStyle = "bold" | "quote-each" | "prose" | "custom";
 
 export interface BibleSettings {
   translation: string;
@@ -20,7 +27,15 @@ export interface BibleSettings {
   style: QuoteStyle;
   includeSourceLink: boolean;
   footnotes: boolean;
+  template: string;
+  verseTemplate: string;
+  verseSeparator: string;
+  parallelTranslations: string;
 }
+
+export const DEFAULT_TEMPLATE = "> {heading}\n>\n{verses}";
+export const DEFAULT_VERSE_TEMPLATE = "> **{number}** {text}";
+export const DEFAULT_VERSE_SEPARATOR = "\\n";
 
 export const DEFAULT_SETTINGS: BibleSettings = {
   translation: "S00",
@@ -28,6 +43,10 @@ export const DEFAULT_SETTINGS: BibleSettings = {
   style: "bold",
   includeSourceLink: false,
   footnotes: true,
+  template: DEFAULT_TEMPLATE,
+  verseTemplate: DEFAULT_VERSE_TEMPLATE,
+  verseSeparator: DEFAULT_VERSE_SEPARATOR,
+  parallelTranslations: "",
 };
 
 const API_BASE = "https://bolls.life";
@@ -152,8 +171,6 @@ const BOOK_NAMES: Record<Language, string[]> = {
   ],
 };
 
-const booksCache = new Map<string, string[]>();
-
 interface TranslationEntry {
   short_name: string;
   full_name: string;
@@ -174,8 +191,6 @@ interface RawVerse {
   comment?: string;
 }
 
-let translationGroupsCache: TranslationGroup[] | null = null;
-
 function aliasLanguage(language: string): Language | null {
   const value = language.toLowerCase();
   if (value === "de" || value.startsWith("german")) return "de";
@@ -190,10 +205,16 @@ function groupMatches(groupLanguage: string | undefined, language: string): bool
 }
 
 async function getJson(url: string): Promise<unknown> {
+  if (cache) {
+    const cached = cache.get<unknown>(url);
+    if (cached !== undefined) return cached;
+  }
   try {
     const response = await requestUrl({ url });
     if (response.status < 200 || response.status >= 300) return null;
-    return response.json as unknown;
+    const data = response.json as unknown;
+    cache?.set(url, data);
+    return data;
   } catch {
     return null;
   }
@@ -215,25 +236,17 @@ function normalize(input: string): string {
 }
 
 async function getBooks(translation: string): Promise<string[]> {
-  const cached = booksCache.get(translation);
-  if (cached) return cached;
   const data = (await getJson(
     `${API_BASE}/get-books/${encodeURIComponent(translation)}/`
   )) as RawBook[] | null;
-  const books: string[] = Array.isArray(data)
-    ? data.map((book) => book.name)
-    : [];
-  booksCache.set(translation, books);
-  return books;
+  return Array.isArray(data) ? data.map((book) => book.name) : [];
 }
 
 async function getTranslationGroups(): Promise<TranslationGroup[]> {
-  if (translationGroupsCache) return translationGroupsCache;
   const languages = (await getJson(
     `${API_BASE}/static/bolls/app/views/languages.json`
   )) as TranslationGroup[] | null;
-  translationGroupsCache = Array.isArray(languages) ? languages : [];
-  return translationGroupsCache;
+  return Array.isArray(languages) ? languages : [];
 }
 
 async function translationName(translation: string): Promise<string> {
@@ -536,10 +549,48 @@ export interface RenderResult {
 interface Passage {
   translation: string;
   bookNumber: number;
+  bookName: string;
   chapter: number;
   referenceLabel: string;
   translationName: string;
   verses: Verse[];
+}
+
+interface TemplateSpec {
+  template: string;
+  verse: string;
+  separator: string;
+}
+
+const STYLE_PRESETS: Record<Exclude<QuoteStyle, "custom">, TemplateSpec> = {
+  bold: {
+    template: "> {heading}\n>\n{verses}",
+    verse: "> **{number}** {text}",
+    separator: "\n",
+  },
+  "quote-each": {
+    template: "{heading}\n\n{verses}",
+    verse: "> **{number}** {text}",
+    separator: "\n\n",
+  },
+  prose: {
+    template: "> {heading}\n>\n> {verses}",
+    verse: "**{number}** {text}",
+    separator: " ",
+  },
+};
+
+function decodeEscapes(value: string): string {
+  return value.replace(/\\n/g, "\n").replace(/\\t/g, "\t");
+}
+
+function applyTemplate(
+  template: string,
+  variables: Record<string, string>
+): string {
+  return template.replace(/\{(\w+)\}/g, (match, key: string) =>
+    key in variables ? variables[key] : match
+  );
 }
 
 function buildSourceLink(passage: Passage): string {
@@ -548,45 +599,67 @@ function buildSourceLink(passage: Passage): string {
   return `${API_BASE}/${passage.translation}/${passage.bookNumber}/${passage.chapter}${verse}/`;
 }
 
-function renderPassage(passage: Passage, settings: BibleSettings): string {
+function passageVariables(
+  passage: Passage
+): Record<string, string> {
+  return {
+    reference: passage.referenceLabel,
+    book: passage.bookName,
+    chapter: String(passage.chapter),
+    translation: passage.translation,
+    translationName: passage.translationName,
+    sourceUrl: buildSourceLink(passage),
+  };
+}
+
+function buildHeading(passage: Passage, settings: BibleSettings): string {
   const label = `**${passage.referenceLabel}** (${passage.translationName})`;
-  const heading = settings.includeSourceLink
+  return settings.includeSourceLink
     ? `[${label}](${buildSourceLink(passage)})`
     : label;
+}
 
-  switch (settings.style) {
-    case "quote-each": {
-      const blocks = passage.verses.map(
-        (verse) => `> **${verse.number}** ${verse.text}`
-      );
-      return [heading, ...blocks].join("\n\n");
-    }
-    case "prose": {
-      const body = passage.verses
-        .map((verse) => `**${verse.number}** ${verse.text}`)
-        .join(" ");
-      return `> ${heading}\n>\n> ${body}`;
-    }
-    default: {
-      const body = passage.verses
-        .map((verse) => `> **${verse.number}** ${verse.text}`)
-        .join("\n");
-      return `> ${heading}\n>\n${body}`;
-    }
-  }
+function renderPassage(passage: Passage, settings: BibleSettings): string {
+  const spec: TemplateSpec =
+    settings.style === "custom"
+      ? {
+          template: settings.template || DEFAULT_TEMPLATE,
+          verse: settings.verseTemplate || DEFAULT_VERSE_TEMPLATE,
+          separator: decodeEscapes(
+            settings.verseSeparator ?? DEFAULT_VERSE_SEPARATOR
+          ),
+        }
+      : STYLE_PRESETS[settings.style] ?? STYLE_PRESETS.bold;
+
+  const base = passageVariables(passage);
+  const verses = passage.verses
+    .map((verse) =>
+      applyTemplate(spec.verse, {
+        ...base,
+        number: String(verse.number),
+        text: verse.text,
+      })
+    )
+    .join(spec.separator);
+
+  return applyTemplate(spec.template, {
+    ...base,
+    heading: buildHeading(passage, settings),
+    verses,
+  });
 }
 
 async function buildPassage(
   reference: string,
   settings: BibleSettings,
-  registry: FootnoteRegistry
+  registry: FootnoteRegistry,
+  translation: string = settings.translation
 ): Promise<Passage> {
   const parsed = parseReference(reference);
   if (!parsed) {
     throw new Error(`Cannot parse reference: ${reference}`);
   }
 
-  const translation = settings.translation;
   const books = await getBooks(translation);
   if (books.length === 0) {
     throw new Error(`Could not load the book list for ${translation}.`);
@@ -612,6 +685,7 @@ async function buildPassage(
   return {
     translation,
     bookNumber: number,
+    bookName,
     chapter: parsed.chapter,
     referenceLabel,
     translationName: name,
@@ -622,9 +696,10 @@ async function buildPassage(
 export async function fetchBibleQuote(
   reference: string,
   settings: BibleSettings,
-  registry: FootnoteRegistry = new FootnoteRegistry()
+  registry: FootnoteRegistry = new FootnoteRegistry(),
+  translation?: string
 ): Promise<RenderResult> {
-  const passage = await buildPassage(reference, settings, registry);
+  const passage = await buildPassage(reference, settings, registry, translation);
   return {
     heading: `**${passage.referenceLabel}** (${passage.translationName})`,
     quote: renderPassage(passage, settings),
@@ -639,26 +714,120 @@ export function splitReferences(input: string): string[] {
     .filter(Boolean);
 }
 
+export function parseTranslations(value: string): string[] {
+  return value
+    .split(/[\s,;]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function appendFootnotes(output: string, footnotes: Footnote[]): string {
+  if (footnotes.length === 0) return output;
+  return (
+    output +
+    "\n\n" +
+    footnotes.map((footnote) => `[^${footnote.label}]: ${footnote.text}`).join("\n")
+  );
+}
+
 export async function fetchBibleQuotes(
   input: string,
-  settings: BibleSettings
+  settings: BibleSettings,
+  translations?: string[]
 ): Promise<string> {
   const references = splitReferences(input);
   if (references.length === 0) {
     throw new Error("No reference given.");
   }
+  const targets = Array.from(
+    new Set([settings.translation, ...(translations ?? [])])
+  ).filter(Boolean);
   const registry = new FootnoteRegistry();
-  const rendered: string[] = [];
-  for (const reference of references) {
-    const { quote } = await fetchBibleQuote(reference, settings, registry);
-    rendered.push(quote);
+  const blocks: string[] = [];
+  for (const translation of targets) {
+    const firstFootnote = registry.all().length;
+    const quotes: string[] = [];
+    for (const reference of references) {
+      const { quote } = await fetchBibleQuote(
+        reference,
+        settings,
+        registry,
+        translation
+      );
+      quotes.push(quote);
+    }
+    const own = registry.all().slice(firstFootnote);
+    blocks.push(appendFootnotes(quotes.join("\n\n"), own));
   }
-  let output = rendered.join("\n\n");
-  const footnotes = registry.all();
-  if (footnotes.length > 0) {
-    output +=
-      "\n\n" +
-      footnotes.map((footnote) => `[^${footnote.label}]: ${footnote.text}`).join("\n");
+  return blocks.join("\n\n");
+}
+
+interface RawSearchHit {
+  book: number;
+  chapter: number;
+  verse: number;
+  text: string;
+}
+
+export interface SearchSegment {
+  text: string;
+  highlight: boolean;
+}
+
+export interface SearchResult {
+  book: number;
+  chapter: number;
+  verse: number;
+  reference: string;
+  segments: SearchSegment[];
+}
+
+const SEARCH_LIMIT = 100;
+
+function splitHighlight(text: string): SearchSegment[] {
+  const cleaned = text
+    .replace(/<f>(?:.|\n)*?<\/f>/g, "")
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<(?!\/?mark\b)[^>]+>/gi, "")
+    .replace(/[\u2009\u00a0]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const regex = /<mark>(.*?)<\/mark>/gi;
+  const segments: SearchSegment[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(cleaned)) !== null) {
+    if (match.index > last) {
+      segments.push({ text: cleaned.slice(last, match.index), highlight: false });
+    }
+    segments.push({ text: match[1], highlight: true });
+    last = regex.lastIndex;
   }
-  return output;
+  if (last < cleaned.length) {
+    segments.push({ text: cleaned.slice(last), highlight: false });
+  }
+  return segments.length > 0 ? segments : [{ text: cleaned, highlight: false }];
+}
+
+export async function searchBible(
+  query: string,
+  translation: string
+): Promise<SearchResult[]> {
+  const data = (await getJson(
+    `${API_BASE}/find/${encodeURIComponent(translation)}/${encodeURIComponent(
+      query
+    )}/`
+  )) as RawSearchHit[] | null;
+  if (!Array.isArray(data)) {
+    throw new Error(`Search failed (${translation}).`);
+  }
+  const books = await getBooks(translation);
+  return data.slice(0, SEARCH_LIMIT).map((hit) => ({
+    book: hit.book,
+    chapter: hit.chapter,
+    verse: hit.verse,
+    reference: `${books[hit.book - 1] ?? hit.book} ${hit.chapter},${hit.verse}`,
+    segments: splitHighlight(hit.text),
+  }));
 }

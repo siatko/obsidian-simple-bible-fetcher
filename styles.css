@@ -1,3 +1,41 @@
 .simple-bible-fetcher-input {
   width: 100%;
 }
+
+.simple-bible-fetcher-status {
+  margin: 0.5em 0;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.simple-bible-fetcher-results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.simple-bible-fetcher-result {
+  height: auto;
+  padding: 6px 8px;
+  text-align: left;
+  white-space: normal;
+  cursor: pointer;
+}
+
+.simple-bible-fetcher-result-ref {
+  font-weight: 600;
+}
+
+.simple-bible-fetcher-result-text {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.simple-bible-fetcher-result-text mark {
+  background-color: var(--text-highlight-bg);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
