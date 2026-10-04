@@ -1,8 +1,12 @@
 # Obsidian
 data.json
+cache.json
 
 # Build output (released as a GitHub asset, not committed)
 main.js
+
+# Test output
+coverage/
 
 # Dependencies
 node_modules/
