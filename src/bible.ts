@@ -381,6 +381,7 @@ function cleanText(text: string | null | undefined): string {
     .replace(/<[^>]+>/g, "")
     .replace(/\[\d+\]/g, "")
     .replace(/[\u2009\u00a0]/g, " ")
+    .replace(/([.!?]["»«„“”']?)([A-ZÄÖÜ])/g, "$1 $2")
     .replace(/\s+/g, " ")
     .trim();
 }
