@@ -1,6 +1,6 @@
 # Simple Bible Fetcher
 
-![Simple Bible Fetcher demo](assets/demo.gif)
+![Simple Bible Fetcher demo](https://raw.githubusercontent.com/siatko/obsidian-simple-bible-fetcher/main/assets/demo.gif)
 
 An [Obsidian](https://obsidian.md) plugin that inserts Bible passages from the
 free [bolls.life](https://bolls.life) API as Markdown quotes.
