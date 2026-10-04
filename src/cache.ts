@@ -15,7 +15,7 @@ export class JsonCache {
   private entries = new Map<string, unknown>();
   private storage: CacheStorage;
   private dirty = false;
-  private timer: ReturnType<typeof setTimeout> | null = null;
+  private timer: number | null = null;
 
   constructor(storage: CacheStorage) {
     this.storage = storage;
@@ -56,7 +56,7 @@ export class JsonCache {
 
   private scheduleSave(): void {
     if (this.timer) return;
-    this.timer = setTimeout(() => {
+    this.timer = window.setTimeout(() => {
       this.timer = null;
       void this.flush();
     }, SAVE_DELAY_MS);
@@ -64,7 +64,7 @@ export class JsonCache {
 
   async flush(): Promise<void> {
     if (this.timer) {
-      clearTimeout(this.timer);
+      window.clearTimeout(this.timer);
       this.timer = null;
     }
     if (!this.dirty) return;

@@ -105,10 +105,10 @@ class SearchModal extends Modal {
     input.addClass("simple-bible-fetcher-input");
     input.focus();
 
-    const status = contentEl.createEl("div", {
+    const status = contentEl.createDiv({
       cls: "simple-bible-fetcher-status",
     });
-    const results = contentEl.createEl("div", {
+    const results = contentEl.createDiv({
       cls: "simple-bible-fetcher-results",
     });
 
@@ -126,17 +126,19 @@ class SearchModal extends Modal {
           const item = results.createEl("button", {
             cls: "simple-bible-fetcher-result",
           });
-          item.createEl("div", {
+          item.createDiv({
             cls: "simple-bible-fetcher-result-ref",
             text: hit.reference,
           });
-          const textEl = item.createEl("div", {
+          const textEl = item.createDiv({
             cls: "simple-bible-fetcher-result-text",
           });
           for (const segment of hit.segments) {
-            textEl.createEl(segment.highlight ? "mark" : "span", {
-              text: segment.text,
-            });
+            if (segment.highlight) {
+              textEl.createEl("mark", { text: segment.text });
+            } else {
+              textEl.createSpan({ text: segment.text });
+            }
           }
           item.addEventListener("click", () => {
             this.close();
@@ -250,7 +252,7 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
   }
 
   async readData(): Promise<Record<string, unknown>> {
-    const data = (await this.loadData()) ?? {};
+    const data: unknown = (await this.loadData()) ?? {};
     return typeof data === "object" && data !== null
       ? (data as Record<string, unknown>)
       : {};
