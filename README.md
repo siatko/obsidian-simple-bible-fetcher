@@ -32,6 +32,7 @@ Several references at once, separated by `;`:
 - Reference parsing with book names, common abbreviations and book numbers
   (`John 3:16`, `1 Cor 13`, `Ps 23`, `43 3:16`, `Gen 1:1`).
 - Multiple references at once, separated by `;` (`John 3:16; Psalm 23`).
+- Chapter ranges (`Psalm 3-5`), inserted as one section per chapter.
 - Footnotes from the source are rendered as Markdown footnotes.
 - Three preset output formats, a custom template, and an optional source link.
 - Keyword search across a translation, inserting the passage you pick.
@@ -73,6 +74,7 @@ German and English additionally understand common abbreviations
 | `John 3:16-18`        | a verse range                       |
 | `John 3:16.18`        | several single verses               |
 | `Psalm 23`            | a whole chapter                     |
+| `Psalm 3-5`           | a chapter range                     |
 | `43 3:16`             | book by its number (1-66)           |
 | `John 3:16; Psalm 23` | several references (also with `;`)  |
 
@@ -82,14 +84,22 @@ spaces, so
 `1. Samuel`, `1 Samuel` and `1sam` all resolve to the same book. The heading
 shows the book name as the chosen translation writes it.
 
+A chapter range such as `Psalm 3-5` is shorthand for `Psalm 3; Psalm 4; Psalm 5`:
+each chapter is inserted as its own section with its own heading, and its
+footnotes follow that section. The order is the same whether you write
+`Psalm 3-5` or `Psalm 5-3`. A chapter range cannot be combined with a verse
+specification (`Psalm 3-5:2` is rejected); write the verses per chapter
+instead.
+
 ## Text cleanup
 
 The raw bolls.life text is normalized before it is inserted:
 
 - Footnotes can be shown or stripped (see the **Footnotes** setting). When
   shown, the source markers become Markdown footnotes (`[^1]`) and the matching
-  text from bolls.life is appended after the passage, with cross-references
-  linking back to bolls.life. Translations without footnotes are unaffected.
+  text from bolls.life is appended after each passage's section, with
+  cross-references linking back to bolls.life. Translations without footnotes
+  are unaffected.
 - Formatting tags are stripped.
 - Missing spaces are added after sentence punctuation, because the source
   occasionally glues sentences together (`…mein Gott!Erleuchte…` becomes
@@ -161,9 +171,9 @@ Main **Translation** `S00` plus **Parallel translations** `LUT` gives:
 ```
 
 If a listed code equals the main translation, it is inserted only once. Each
-translation is inserted with all of its references together, and that
-translation's footnotes follow it. Multiple references are still separated by
-`;`.
+translation is inserted with all of its references together, and each
+reference's footnotes follow that reference's section. Multiple references are
+still separated by `;`.
 
 ## Offline cache
 

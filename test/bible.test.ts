@@ -30,6 +30,7 @@ describe("parseReference", () => {
     expect(parseReference("Johannes 3:16")).toEqual({
       book: "Johannes",
       chapter: 3,
+      chapterEnd: null,
       spec: [[16, 16]],
     });
   });
@@ -57,8 +58,22 @@ describe("parseReference", () => {
     expect(parseReference("Psalm 23")).toEqual({
       book: "Psalm",
       chapter: 23,
+      chapterEnd: null,
       spec: null,
     });
+  });
+
+  it("parses a chapter range", () => {
+    expect(parseReference("Psalm 3-5")).toEqual({
+      book: "Psalm",
+      chapter: 3,
+      chapterEnd: 5,
+      spec: null,
+    });
+  });
+
+  it("rejects a chapter range combined with a verse spec", () => {
+    expect(parseReference("Psalm 3-5:2")).toBeNull();
   });
 
   it("returns null for input without a chapter", () => {
@@ -69,6 +84,22 @@ describe("parseReference", () => {
 describe("splitReferences", () => {
   it("splits on semicolons and newlines and drops blanks", () => {
     expect(splitReferences("a; b\nc;; d")).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("expands a chapter range into single chapters", () => {
+    expect(splitReferences("Psalm 3-5")).toEqual([
+      "Psalm 3",
+      "Psalm 4",
+      "Psalm 5",
+    ]);
+  });
+
+  it("normalises a reversed chapter range", () => {
+    expect(splitReferences("Psalm 5-3")).toEqual([
+      "Psalm 3",
+      "Psalm 4",
+      "Psalm 5",
+    ]);
   });
 });
 
@@ -187,6 +218,13 @@ describe("fetchBibleQuote", () => {
     );
   });
 
+  it("rejects a chapter range passed directly to fetchBibleQuote", async () => {
+    useApi();
+    await expect(fetchBibleQuote("Psalm 3-5", settings())).rejects.toThrow(
+      /Chapter ranges must be split/
+    );
+  });
+
   it("falls back to the translation code when the name is unknown", async () => {
     useApi();
     const result = await fetchBibleQuote(
@@ -299,19 +337,39 @@ describe("output formats", () => {
 });
 
 describe("fetchBibleQuotes", () => {
-  it("joins several references and appends their footnotes once", async () => {
+  it("appends each reference's footnotes to that section", async () => {
     useApi();
     const output = await fetchBibleQuotes(
       "Johannes 3:16; Johannes 3:18",
       settings()
     );
 
-    expect(output).toContain("> **Johannes 3,16** (Schlachter 2000)");
-    expect(output).toContain("> **Johannes 3,18** (Schlachter 2000)");
-    expect(output).toContain("[^1]");
-    expect(output).toContain("[^2]");
-    expect(output).toContain("[^1]: andere übersetzen");
-    expect(output).toContain("[^2]: vgl.");
+    const firstSection = output.indexOf("> **Johannes 3,16**");
+    const firstFootnote = output.indexOf("[^1]: andere übersetzen");
+    const secondSection = output.indexOf("> **Johannes 3,18**");
+    const secondFootnote = output.indexOf("[^2]: vgl.");
+
+    expect(firstSection).toBeGreaterThanOrEqual(0);
+    expect(firstFootnote).toBeGreaterThan(firstSection);
+    expect(secondSection).toBeGreaterThan(firstFootnote);
+    expect(secondFootnote).toBeGreaterThan(secondSection);
+  });
+
+  it("expands a chapter range into one section per chapter", async () => {
+    useApi();
+    const output = await fetchBibleQuotes("Psalm 3-5", settings());
+
+    const third = output.indexOf("> **Psalm 3**");
+    const secondFootnote = output.indexOf("[^2]:");
+    const fourth = output.indexOf("> **Psalm 4**");
+    const thirdFootnote = output.indexOf("[^3]:");
+    const fifth = output.indexOf("> **Psalm 5**");
+
+    expect(third).toBeGreaterThanOrEqual(0);
+    expect(secondFootnote).toBeGreaterThan(third);
+    expect(fourth).toBeGreaterThan(secondFootnote);
+    expect(thirdFootnote).toBeGreaterThan(fourth);
+    expect(fifth).toBeGreaterThan(thirdFootnote);
   });
 
   it("rejects empty input", async () => {

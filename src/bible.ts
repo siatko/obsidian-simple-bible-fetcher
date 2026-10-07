@@ -357,7 +357,7 @@ function resolveBook(
 export type VerseSpec = Array<[number, number]>;
 
 const REFERENCE_RE =
-  /^\s*(.+?)\s+(\d+)(?:\s*[,.:]\s*(\d+(?:\s*[-–—]\s*\d+)?(?:\s*[.,]\s*\d+(?:\s*[-–—]\s*\d+)?)*))?\s*$/;
+  /^\s*(.+?)\s+(\d+)(?:\s*[-–—]\s*(\d+))?(?:\s*[,.:]\s*(\d+(?:\s*[-–—]\s*\d+)?(?:\s*[.,]\s*\d+(?:\s*[-–—]\s*\d+)?)*))?\s*$/;
 
 function parseVerseSpec(spec?: string): VerseSpec | null {
   if (!spec || !spec.trim()) return null;
@@ -380,16 +380,21 @@ function parseVerseSpec(spec?: string): VerseSpec | null {
 export interface ParsedReference {
   book: string;
   chapter: number;
+  chapterEnd: number | null;
   spec: VerseSpec | null;
 }
 
 export function parseReference(reference: string): ParsedReference | null {
   const match = reference.match(REFERENCE_RE);
   if (!match) return null;
+  const chapterEnd = match[3] ? parseInt(match[3], 10) : null;
+  const spec = parseVerseSpec(match[4]);
+  if (chapterEnd !== null && spec !== null) return null;
   return {
     book: match[1].trim(),
     chapter: parseInt(match[2], 10),
-    spec: parseVerseSpec(match[3]),
+    chapterEnd,
+    spec,
   };
 }
 
@@ -659,6 +664,11 @@ async function buildPassage(
   if (!parsed) {
     throw new Error(`Cannot parse reference: ${reference}`);
   }
+  if (parsed.chapterEnd !== null) {
+    throw new Error(
+      `Chapter ranges must be split into single chapters first: ${reference}`
+    );
+  }
 
   const books = await getBooks(translation);
   if (books.length === 0) {
@@ -707,11 +717,24 @@ export async function fetchBibleQuote(
   };
 }
 
+function expandChapterRange(reference: string): string[] {
+  const parsed = parseReference(reference);
+  if (!parsed || parsed.chapterEnd === null) return [reference];
+  const first = Math.min(parsed.chapter, parsed.chapterEnd);
+  const last = Math.max(parsed.chapter, parsed.chapterEnd);
+  const chapters: string[] = [];
+  for (let chapter = first; chapter <= last; chapter += 1) {
+    chapters.push(`${parsed.book} ${chapter}`);
+  }
+  return chapters;
+}
+
 export function splitReferences(input: string): string[] {
   return input
     .split(/[;\n]+/)
     .map((part) => part.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .flatMap(expandChapterRange);
 }
 
 export function parseTranslations(value: string): string[] {
@@ -745,19 +768,19 @@ export async function fetchBibleQuotes(
   const registry = new FootnoteRegistry();
   const blocks: string[] = [];
   for (const translation of targets) {
-    const firstFootnote = registry.all().length;
     const quotes: string[] = [];
     for (const reference of references) {
+      const firstFootnote = registry.all().length;
       const { quote } = await fetchBibleQuote(
         reference,
         settings,
         registry,
         translation
       );
-      quotes.push(quote);
+      const own = registry.all().slice(firstFootnote);
+      quotes.push(appendFootnotes(quote, own));
     }
-    const own = registry.all().slice(firstFootnote);
-    blocks.push(appendFootnotes(quotes.join("\n\n"), own));
+    blocks.push(quotes.join("\n\n"));
   }
   return blocks.join("\n\n");
 }
