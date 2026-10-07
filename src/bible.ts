@@ -730,11 +730,12 @@ function expandChapterRange(reference: string): string[] {
 }
 
 export function splitReferences(input: string): string[] {
-  return input
-    .split(/[;\n]+/)
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .flatMap(expandChapterRange);
+  const references: string[] = [];
+  for (const part of input.split(/[;\n]+/)) {
+    const trimmed = part.trim();
+    if (trimmed) references.push(...expandChapterRange(trimmed));
+  }
+  return references;
 }
 
 export function parseTranslations(value: string): string[] {
