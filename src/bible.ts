@@ -398,12 +398,19 @@ export function parseReference(reference: string): ParsedReference | null {
   };
 }
 
+function toMarkdown(text: string): string {
+  return text
+    .replace(/<b(?:\s[^>]*)?>((?:.|\n)*?)<\/b>/gi, "**$1**")
+    .replace(/<strong(?:\s[^>]*)?>((?:.|\n)*?)<\/strong>/gi, "**$1**")
+    .replace(/<i(?:\s[^>]*)?>((?:.|\n)*?)<\/i>/gi, "*$1*")
+    .replace(/<em(?:\s[^>]*)?>((?:.|\n)*?)<\/em>/gi, "*$1*");
+}
+
 function cleanText(text: string | null | undefined): string {
   if (!text) return "";
-  return text
+  return toMarkdown(text)
     .replace(/<f>(?:.|\n)*?<\/f>/g, "")
     .replace(/<sup>(?:.|\n)*?<\/sup>/g, "")
-    .replace(/<\/?i>/g, "")
     .replace(/<[^>]+>/g, "")
     .replace(/\[\d+\]/g, "")
     .replace(/\[/g, "\\[")
@@ -431,7 +438,7 @@ class FootnoteRegistry {
 }
 
 function cleanFootnote(text: string): string {
-  return text
+  return toMarkdown(text)
     .replace(
       /<a href=['"]([^'"]+)['"]>((?:.|\n)*?)<\/a>/g,
       (_match, href: string, label: string) => {

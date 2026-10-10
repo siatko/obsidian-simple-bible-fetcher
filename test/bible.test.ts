@@ -605,6 +605,55 @@ describe("footnote and cleanup edge cases", () => {
     expect(result.footnotes[0]?.text).toContain("(https://example.com/x)");
   });
 
+  it("maps inline formatting to Markdown", async () => {
+    useApi(
+      createApi({
+        chapters: {
+          "S00/Johannes/1": [
+            {
+              verse: 1,
+              text: "a <i>c</i> b <b>d</b> e <strong>f</strong> g <em>h</em>",
+            },
+          ],
+        },
+      })
+    );
+    const result = await fetchBibleQuote("Johannes 1", settings());
+    expect(result.quote).toContain("a *c* b **d** e **f** g *h*");
+  });
+
+  it("maps formatting with attributes and in uppercase", async () => {
+    useApi(
+      createApi({
+        chapters: {
+          "S00/Johannes/1": [
+            { verse: 1, text: "x <I class=\"w\">y</I> <B>z</B>" },
+          ],
+        },
+      })
+    );
+    const result = await fetchBibleQuote("Johannes 1", settings());
+    expect(result.quote).toContain("x *y* **z**");
+  });
+
+  it("maps formatting inside footnote bodies", async () => {
+    useApi(
+      createApi({
+        chapters: {
+          "S00/Johannes/1": [
+            {
+              verse: 1,
+              text: "Text<f>[1]</f>",
+              comment: "\u2009[1] siehe <i>so</i>.",
+            },
+          ],
+        },
+      })
+    );
+    const result = await fetchBibleQuote("Johannes 1", settings());
+    expect(result.footnotes[0]?.text).toBe("siehe *so*.");
+  });
+
   it("drops footnote markers without a number or body", async () => {
     useApi(
       createApi({

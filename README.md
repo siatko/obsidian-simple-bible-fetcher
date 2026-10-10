@@ -100,7 +100,8 @@ The raw bolls.life text is normalized before it is inserted:
   text from bolls.life is appended after each passage's section, with
   cross-references linking back to bolls.life. Translations without footnotes
   are unaffected.
-- Formatting tags are stripped.
+- Formatting is preserved: source italics (`<i>`) and bold (`<b>`/`<strong>`)
+  become Markdown `*…*` and `**…**`. Any other tags are stripped.
 - Missing spaces are added after sentence punctuation, because the source
   occasionally glues sentences together (`…mein Gott!Erleuchte…` becomes
   `…mein Gott! Erleuchte…`).
