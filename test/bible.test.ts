@@ -7,7 +7,6 @@ import {
   listLanguages,
   listTranslations,
   needsNoteTitle,
-  parseNoteColors,
   parseReference,
   parseVerseContexts,
   QuoteStyle,
@@ -105,6 +104,7 @@ describe("parseVerseContexts", () => {
         verses: "16",
         text: "Denn so hat Gott die Welt geliebt.",
         translation: "Schlachter 2000",
+        endLine: 2,
       },
     ]);
   });
@@ -128,6 +128,7 @@ describe("parseVerseContexts", () => {
         verses: "17",
         text: "Denn Gott hat seinen Sohn nicht gesandt.",
         translation: "Schlachter 2000",
+        endLine: 2,
       },
     ]);
   });
@@ -154,6 +155,7 @@ describe("parseVerseContexts", () => {
         verses: "16-18",
         text: "one two three",
         translation: "Schlachter 2000",
+        endLine: 4,
       },
     ]);
   });
@@ -184,6 +186,7 @@ describe("parseVerseContexts", () => {
         verses: "43-44",
         text: "a b",
         translation: "Schlachter 2000",
+        endLine: 3,
       },
       {
         reference: "Lukas 1,1-2",
@@ -193,6 +196,7 @@ describe("parseVerseContexts", () => {
         verses: "1-2",
         text: "c d",
         translation: "Schlachter 2000",
+        endLine: 8,
       },
     ]);
   });
@@ -213,6 +217,7 @@ describe("parseVerseContexts", () => {
         verses: "16-17",
         text: "one two",
         translation: "",
+        endLine: 3,
       },
     ]);
   });
@@ -287,21 +292,6 @@ describe("needsNoteTitle", () => {
   });
 });
 
-describe("parseNoteColors", () => {
-  it("parses name = #hex lines into colors", () => {
-    expect(parseNoteColors("yellow = #d4a017\nblue = 4a7fd6")).toEqual([
-      { name: "yellow", hex: "#d4a017", rgb: "212, 160, 23" },
-      { name: "blue", hex: "#4a7fd6", rgb: "74, 127, 214" },
-    ]);
-  });
-
-  it("skips blank and malformed lines", () => {
-    expect(parseNoteColors("\nnot a color\nred=#ff0000")).toEqual([
-      { name: "red", hex: "#ff0000", rgb: "255, 0, 0" },
-    ]);
-  });
-});
-
 describe("renderNotePath", () => {
   const context = {
     reference: "Johannes 3,16-18",
@@ -311,6 +301,7 @@ describe("renderNotePath", () => {
     verses: "16-18",
     text: "one two three",
     translation: "Schlachter 2000",
+    endLine: 4,
   };
 
   it("fills every placeholder", () => {

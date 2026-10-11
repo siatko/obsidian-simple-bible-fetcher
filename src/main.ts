@@ -10,16 +10,13 @@ import {
 } from "obsidian";
 import {
   BibleSettings,
-  DEFAULT_NOTE_COLOR,
-  DEFAULT_NOTE_COLORS,
   DEFAULT_NOTE_FORMAT,
   DEFAULT_SETTINGS,
   fetchBibleQuotes,
   listLanguages,
   listTranslations,
   needsNoteTitle,
-  NoteColor,
-  parseNoteColors,
+  NOTE_COLORS,
   parseTranslations,
   parseVerseContexts,
   QuoteStyle,
@@ -98,7 +95,7 @@ class ReferenceModal extends Modal {
 class NoteTitleModal extends Modal {
   private initial: string;
   private needsTitle: boolean;
-  private colors: NoteColor[];
+  private colors: string[];
   private defaultColor: string;
   private onSubmit: (title: string, color: string) => void;
 
@@ -106,7 +103,7 @@ class NoteTitleModal extends Modal {
     app: App,
     initial: string,
     needsTitle: boolean,
-    colors: NoteColor[],
+    colors: string[],
     defaultColor: string,
     onSubmit: (title: string, color: string) => void
   ) {
@@ -139,7 +136,7 @@ class NoteTitleModal extends Modal {
     const select = contentEl.createEl("select");
     select.addClass("simple-bible-fetcher-input");
     for (const color of this.colors) {
-      select.createEl("option", { text: color.name, value: color.name });
+      select.createEl("option", { text: color, value: color });
     }
     select.value = this.defaultColor;
 
@@ -255,7 +252,6 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
   settings: BibleSettings;
   private cache: JsonCache | null = null;
   private dataQueue: Promise<void> = Promise.resolve();
-  private colorStyles: HTMLStyleElement | null = null;
 
   async onload(): Promise<void> {
     const cache = new JsonCache(new PluginDataStorage(this));
@@ -264,7 +260,6 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
     this.cache = cache;
 
     await this.loadSettings();
-    this.applyColorStyles();
 
     this.addCommand({
       id: "insert-bible-quote",
@@ -295,26 +290,6 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
 
   onunload(): void {
     void this.cache?.flush();
-    this.colorStyles?.remove();
-    this.colorStyles = null;
-  }
-
-  private noteColors(): NoteColor[] {
-    const colors = parseNoteColors(this.settings.noteColors);
-    return colors.length > 0 ? colors : parseNoteColors(DEFAULT_NOTE_COLORS);
-  }
-
-  private applyColorStyles(): void {
-    if (!this.colorStyles) {
-      this.colorStyles = document.createElement("style");
-      document.head.appendChild(this.colorStyles);
-    }
-    this.colorStyles.textContent = this.noteColors()
-      .map(
-        (color) =>
-          `.callout[data-callout="zettel-${color.name}"] { --callout-color: ${color.rgb}; }`
-      )
-      .join("\n");
   }
 
   private promptAndInsert(editor: Editor): void {
@@ -382,14 +357,12 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
       return;
     }
     const template = this.noteTemplate();
-    const colors = this.noteColors();
-    const defaultColor = colors.some(
-      (color) => color.name === this.settings.noteDefaultColor
-    )
+    const colors = NOTE_COLORS;
+    const defaultColor = colors.includes(this.settings.noteDefaultColor)
       ? this.settings.noteDefaultColor
-      : colors[0].name;
+      : colors[0];
     const queue = [...contexts];
-    let insertLine = Math.max(from.line, to.line);
+    let offset = 0;
     const createNext = (): void => {
       const context = queue.shift();
       if (!context) return;
@@ -404,14 +377,14 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
         (title, color) => {
           void this.createNote(
             editor,
-            insertLine,
+            context.endLine + offset,
             context,
             template,
             title,
             color
           ).then((created) => {
             if (!created) return;
-            insertLine += 3;
+            offset += 3;
             createNext();
           });
         }
@@ -509,7 +482,6 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
     await this.mutateData((data) => {
       Object.assign(data, this.settings);
     });
-    this.applyColorStyles();
   }
 }
 
@@ -686,17 +658,15 @@ class SimpleBibleFetcherSettingTab extends PluginSettingTab {
         },
       },
       {
-        name: "Note colors",
-        desc: "Palette for annotation notes, one per line as name = #hex. The name becomes the callout type (zettel-name).",
-        control: { type: "textarea", key: "noteColors", rows: 6 },
-      },
-      {
         name: "Default note color",
-        desc: "Palette name preselected when creating an annotation note.",
+        desc: "Color preselected when creating an annotation note. The palette lives in styles.css.",
         control: {
-          type: "text",
+          type: "dropdown",
           key: "noteDefaultColor",
-          placeholder: DEFAULT_NOTE_COLOR,
+          options: NOTE_COLORS.reduce<Record<string, string>>((options, name) => {
+            options[name] = name;
+            return options;
+          }, {}),
         },
       },
     ];

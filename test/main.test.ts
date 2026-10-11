@@ -183,7 +183,6 @@ describe("plugin surface", () => {
     expect(byName("Note folder")?.control?.key).toBe("noteFolder");
     expect(byName("Note format")?.control?.key).toBe("noteFormat");
     expect(byName("Note opens")?.control?.key).toBe("noteOpen");
-    expect(byName("Note colors")?.control?.key).toBe("noteColors");
     expect(byName("Default note color")?.control?.key).toBe(
       "noteDefaultColor"
     );
@@ -737,22 +736,6 @@ describe("annotate command", () => {
     ).toBe(true);
   });
 
-  it("falls back to the built-in palette when note colors are blank", async () => {
-    useApi();
-    const plugin = await loadPlugin({ noteColors: "   " });
-    const editor = verseEditor(chapter, 2);
-
-    command(plugin, "annotate-verse").editorCallback?.(editor);
-    const input = annotateInput();
-    input.value = "Palette";
-    pressEnter(input);
-
-    await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalled());
-    expect(editor.replaceRange.mock.calls[0][0]).toContain(
-      "> [!zettel-yellow]"
-    );
-  });
-
   it("falls back to the first color when the default is unknown", async () => {
     useApi();
     const plugin = await loadPlugin({ noteDefaultColor: "nope" });
@@ -827,7 +810,7 @@ describe("annotate command", () => {
     expect(editor.replaceRange).toHaveBeenNthCalledWith(
       1,
       "\n\n> [!zettel-yellow]\n> ![[Bible Notes/Markus 1,43-44 (Schlachter 2000)]]",
-      { line: 8, ch: 9 }
+      { line: 3, ch: 10 }
     );
     expect(editor.replaceRange).toHaveBeenNthCalledWith(
       2,

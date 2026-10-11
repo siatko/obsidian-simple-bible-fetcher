@@ -62,6 +62,46 @@
   --callout-color: 255, 208, 0;
 }
 
+.callout[data-callout="zettel-yellow"] {
+  --callout-color: 212, 160, 23;
+}
+
+.callout[data-callout="zettel-orange"] {
+  --callout-color: 224, 123, 57;
+}
+
+.callout[data-callout="zettel-red"] {
+  --callout-color: 214, 69, 69;
+}
+
+.callout[data-callout="zettel-green"] {
+  --callout-color: 76, 154, 82;
+}
+
+.callout[data-callout="zettel-teal"] {
+  --callout-color: 58, 163, 163;
+}
+
+.callout[data-callout="zettel-blue"] {
+  --callout-color: 74, 127, 214;
+}
+
+.callout[data-callout="zettel-purple"] {
+  --callout-color: 138, 92, 214;
+}
+
+.callout[data-callout="zettel-pink"] {
+  --callout-color: 214, 92, 154;
+}
+
+.callout[data-callout="zettel-gray"] {
+  --callout-color: 138, 138, 138;
+}
+
+.callout[data-callout="zettel-brown"] {
+  --callout-color: 154, 107, 76;
+}
+
 .simple-bible-fetcher-modal h3 {
   margin: 0 0 0.75em;
 }

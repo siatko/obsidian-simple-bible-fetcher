@@ -34,7 +34,6 @@ export interface BibleSettings {
   noteFolder: string;
   noteFormat: string;
   noteOpen: NoteOpen;
-  noteColors: string;
   noteDefaultColor: string;
 }
 
@@ -46,18 +45,18 @@ export const DEFAULT_VERSE_SEPARATOR = "\\n";
 export const DEFAULT_NOTE_FOLDER = "Bible Notes";
 export const DEFAULT_NOTE_FORMAT = "{title}";
 export const DEFAULT_NOTE_OPEN: NoteOpen = "split";
-export const DEFAULT_NOTE_COLORS = [
-  "yellow = #d4a017",
-  "orange = #e07b39",
-  "red = #d64545",
-  "green = #4c9a52",
-  "teal = #3aa3a3",
-  "blue = #4a7fd6",
-  "purple = #8a5cd6",
-  "pink = #d65c9a",
-  "gray = #8a8a8a",
-  "brown = #9a6b4c",
-].join("\n");
+export const NOTE_COLORS = [
+  "yellow",
+  "orange",
+  "red",
+  "green",
+  "teal",
+  "blue",
+  "purple",
+  "pink",
+  "gray",
+  "brown",
+];
 export const DEFAULT_NOTE_COLOR = "yellow";
 
 export const DEFAULT_SETTINGS: BibleSettings = {
@@ -73,29 +72,8 @@ export const DEFAULT_SETTINGS: BibleSettings = {
   noteFolder: DEFAULT_NOTE_FOLDER,
   noteFormat: DEFAULT_NOTE_FORMAT,
   noteOpen: DEFAULT_NOTE_OPEN,
-  noteColors: DEFAULT_NOTE_COLORS,
   noteDefaultColor: DEFAULT_NOTE_COLOR,
 };
-
-export interface NoteColor {
-  name: string;
-  hex: string;
-  rgb: string;
-}
-
-export function parseNoteColors(value: string): NoteColor[] {
-  const colors: NoteColor[] = [];
-  for (const line of value.split("\n")) {
-    const match = line.match(/^\s*([\w-]+)\s*=\s*#?([0-9a-fA-F]{6})\s*$/);
-    if (!match) continue;
-    const hex = match[2].toLowerCase();
-    const rgb = [0, 2, 4]
-      .map((index) => parseInt(hex.slice(index, index + 2), 16))
-      .join(", ");
-    colors.push({ name: match[1], hex: `#${hex}`, rgb });
-  }
-  return colors;
-}
 
 const API_BASE = "https://bolls.life";
 
@@ -454,6 +432,7 @@ export interface VerseContext {
   verses: string;
   text: string;
   translation: string;
+  endLine: number;
 }
 
 const HEADING_LABEL = /^\s*>?\s*\[?\*\*([^*]+)\*\*(?:\s*\(([^)]*)\))?/;
@@ -498,6 +477,7 @@ export function parseVerseContexts(
   const contexts: VerseContext[] = [];
   let numbers: number[] = [];
   let texts: string[] = [];
+  let endLine = first;
 
   const flush = (): void => {
     if (!hasHeading || numbers.length === 0) return;
@@ -510,6 +490,7 @@ export function parseVerseContexts(
       verses: spec.map(formatRange).join("."),
       text: texts.join(" "),
       translation,
+      endLine,
     });
     numbers = [];
     texts = [];
@@ -532,6 +513,7 @@ export function parseVerseContexts(
     const match = line.match(VERSE_LABEL);
     if (!match) continue;
     numbers.push(parseInt(match[1], 10));
+    endLine = index;
     const body = line.match(VERSE_TEXT);
     if (body) texts.push(body[1].trim());
   }

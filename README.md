@@ -174,8 +174,7 @@ The raw bolls.life text is normalized before it is inserted:
 | Note folder           | Folder for **Annotate verse** notes, with vault-folder autocomplete. Blank means the vault root. |
 | Note format           | File name (and optional subfolders) for **Annotate verse** notes. Placeholders: `{title}`, `{reference}`, `{translation}`, `{book}`, `{chapter}`, `{verse}`, `{verses}`. A title is only asked for when the format contains `{title}`. |
 | Note opens            | Where a new annotation note opens: `Split right` (default), `New tab`, or `Do not open`. |
-| Note colors           | Post-it palette for annotation notes, one per line as `name = #hex`. The name becomes the callout type (`zettel-name`) and is a free label, only the hex colour is used. Ten defaults are provided. |
-| Default note color    | Palette name preselected when creating an annotation note. |
+| Default note color    | Colour preselected when creating an annotation note. One of the ten built-in post-it colours. |
 
 ## Custom template
 
@@ -213,8 +212,9 @@ want to annotate, or select one or more verses, and run the command: it reads
 the reference and its heading, creates a note and embeds it in a `zettel`
 callout just below the quote. A selection spanning several verses becomes a
 range such as `Johannes 3,16-18`. A selection that spans several chapters is
-split per chapter, so each chapter gets its own note and callout, for example
-`Markus 1,43-44` and `Lukas 1,1-2` from a selection over both.
+split per chapter, so each chapter gets its own note and callout directly below
+that chapter's verses, for example `Markus 1,43-44` and `Lukas 1,1-2` from a
+selection over both.
 
 ```markdown
 > **16** Denn so hat Gott die Welt geliebt …
@@ -225,14 +225,11 @@ split per chapter, so each chapter gets its own note and callout, for example
 
 The note is embedded inside a `zettel-<color>` callout, drawn as a post-it with
 an always-visible coloured border. When you create a note, the dialog offers a
-dropdown of the colours from the **Note colors** palette and preselects the
-**Default note color**.
-
-The palette names are free labels, they carry no meaning of their own: only the
-`#hex` value is used to draw the callout. So instead of colours you can name
-entries after how you use them, for example `jesus`, `god`, `good` or `bad`, each
-with the hex colour you want, and pick `bad` when you want a red note. The name
-only has to be unique within the palette.
+dropdown of the ten built-in colours and preselects the **Default note color**:
+`yellow`, `orange`, `red`, `green`, `teal`, `blue`, `purple`, `pink`, `gray` and
+`brown`. Each is defined in `styles.css`, so to use your own colours override
+them in a CSS snippet, for example:
+`body .callout[data-callout="zettel-yellow"] { --callout-color: 212, 160, 23; }`.
 
 Where the note goes is set by two settings, like the Daily Notes plugin. The
 **Note folder** field has the same vault-folder autocomplete (blank means the
