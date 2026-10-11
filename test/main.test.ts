@@ -793,6 +793,56 @@ describe("annotate command", () => {
     );
   });
 
+  it("creates one note per chapter for a cross-chapter selection", async () => {
+    useApi();
+    const plugin = await loadPlugin({
+      noteFolder: "Bible Notes",
+      noteFormat: "{title}",
+    });
+    const editor = verseEditor(
+      [
+        "> **Markus 1** (Schlachter 2000)",
+        ">",
+        "> **43** a",
+        "> **44** b",
+        "",
+        "> **Lukas 1** (Schlachter 2000)",
+        ">",
+        "> **1** c",
+        "> **2** d",
+      ],
+      2,
+      8
+    );
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+    expect(annotateInput().value).toBe("Markus 1,43-44 (Schlachter 2000)");
+    pressEnter(annotateInput());
+
+    await vi.waitFor(() => expect(Modal.instances).toHaveLength(2));
+    expect(annotateInput().value).toBe("Lukas 1,1-2 (Schlachter 2000)");
+    pressEnter(annotateInput());
+
+    await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalledTimes(2));
+    expect(editor.replaceRange).toHaveBeenNthCalledWith(
+      1,
+      "\n\n> [!zettel-yellow]\n> ![[Bible Notes/Markus 1,43-44 (Schlachter 2000)]]",
+      { line: 8, ch: 9 }
+    );
+    expect(editor.replaceRange).toHaveBeenNthCalledWith(
+      2,
+      "\n\n> [!zettel-yellow]\n> ![[Bible Notes/Lukas 1,1-2 (Schlachter 2000)]]",
+      { line: 11, ch: 0 }
+    );
+    const app = stubApp(plugin);
+    expect(
+      app.vault.files.has("Bible Notes/Markus 1,43-44 (Schlachter 2000).md")
+    ).toBe(true);
+    expect(
+      app.vault.files.has("Bible Notes/Lukas 1,1-2 (Schlachter 2000).md")
+    ).toBe(true);
+  });
+
   it("uses just the reference as the title without a translation", async () => {
     useApi();
     const plugin = await loadPlugin({

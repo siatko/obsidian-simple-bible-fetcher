@@ -21,7 +21,7 @@ import {
   NoteColor,
   parseNoteColors,
   parseTranslations,
-  parseVerseContext,
+  parseVerseContexts,
   QuoteStyle,
   renderNotePath,
   SearchResult,
@@ -373,15 +373,14 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
     const lines = Array.from({ length: editor.lineCount() }, (_, index) =>
       editor.getLine(index)
     );
-    const context = parseVerseContext(lines, from.line, to.line);
-    if (!context) {
+    const contexts = parseVerseContexts(lines, from.line, to.line);
+    if (contexts.length === 0) {
       new Notice(
         "Simple Bible Fetcher: place the cursor on a verse inserted by the plugin, or select one or more verses.",
         6000
       );
       return;
     }
-    const insertLine = Math.max(from.line, to.line);
     const template = this.noteTemplate();
     const colors = this.noteColors();
     const defaultColor = colors.some(
@@ -389,18 +388,36 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
     )
       ? this.settings.noteDefaultColor
       : colors[0].name;
-    new NoteTitleModal(
-      this.app,
-      context.translation
-        ? `${context.reference} (${context.translation})`
-        : context.reference,
-      needsNoteTitle(template),
-      colors,
-      defaultColor,
-      (title, color) => {
-        void this.createNote(editor, insertLine, context, template, title, color);
-      }
-    ).open();
+    const queue = [...contexts];
+    let insertLine = Math.max(from.line, to.line);
+    const createNext = (): void => {
+      const context = queue.shift();
+      if (!context) return;
+      new NoteTitleModal(
+        this.app,
+        context.translation
+          ? `${context.reference} (${context.translation})`
+          : context.reference,
+        needsNoteTitle(template),
+        colors,
+        defaultColor,
+        (title, color) => {
+          void this.createNote(
+            editor,
+            insertLine,
+            context,
+            template,
+            title,
+            color
+          ).then((created) => {
+            if (!created) return;
+            insertLine += 3;
+            createNext();
+          });
+        }
+      ).open();
+    };
+    createNext();
   }
 
   private noteTemplate(): string {
@@ -416,7 +433,7 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
     template: string,
     title: string,
     color: string
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       let path = normalizePath(
         renderNotePath(template, context, sanitizeFileName(title))
@@ -433,8 +450,10 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
         ch: target.length,
       });
       await this.openNote(path);
+      return true;
     } catch (error) {
       new Notice(`Simple Bible Fetcher: ${errorMessage(error)}`, 6000);
+      return false;
     }
   }
 

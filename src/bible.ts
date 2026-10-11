@@ -471,41 +471,72 @@ function numberRanges(numbers: number[]): VerseSpec {
   return ranges;
 }
 
-export function parseVerseContext(
+export function parseVerseContexts(
   lines: string[],
   fromLine: number,
   toLine: number = fromLine
-): VerseContext | null {
+): VerseContext[] {
   const first = Math.min(fromLine, toLine);
   const last = Math.max(fromLine, toLine);
-  const numbers: number[] = [];
-  const texts: string[] = [];
+
+  let book = "";
+  let chapter = 0;
+  let translation = "";
+  let hasHeading = false;
+  for (let index = first - 1; index >= 0; index -= 1) {
+    const heading = (lines[index] ?? "").match(HEADING_LABEL);
+    if (!heading) continue;
+    const parsed = parseReference(heading[1]);
+    if (!parsed) continue;
+    book = parsed.book;
+    chapter = parsed.chapter;
+    translation = heading[2] ?? "";
+    hasHeading = true;
+    break;
+  }
+
+  const contexts: VerseContext[] = [];
+  let numbers: number[] = [];
+  let texts: string[] = [];
+
+  const flush = (): void => {
+    if (!hasHeading || numbers.length === 0) return;
+    const spec = numberRanges(numbers);
+    contexts.push({
+      reference: formatReference(book, chapter, spec),
+      book,
+      chapter,
+      verse: spec[0][0],
+      verses: spec.map(formatRange).join("."),
+      text: texts.join(" "),
+      translation,
+    });
+    numbers = [];
+    texts = [];
+  };
+
   for (let index = first; index <= last; index += 1) {
     const line = lines[index] ?? "";
+    const heading = line.match(HEADING_LABEL);
+    if (heading) {
+      const parsed = parseReference(heading[1]);
+      if (parsed) {
+        flush();
+        book = parsed.book;
+        chapter = parsed.chapter;
+        translation = heading[2] ?? "";
+        hasHeading = true;
+        continue;
+      }
+    }
     const match = line.match(VERSE_LABEL);
     if (!match) continue;
     numbers.push(parseInt(match[1], 10));
     const body = line.match(VERSE_TEXT);
     if (body) texts.push(body[1].trim());
   }
-  if (numbers.length === 0) return null;
-  for (let index = first - 1; index >= 0; index -= 1) {
-    const heading = lines[index].match(HEADING_LABEL);
-    if (!heading) continue;
-    const parsed = parseReference(heading[1]);
-    if (!parsed) continue;
-    const spec = numberRanges(numbers);
-    return {
-      reference: formatReference(parsed.book, parsed.chapter, spec),
-      book: parsed.book,
-      chapter: parsed.chapter,
-      verse: spec[0][0],
-      verses: spec.map(formatRange).join("."),
-      text: texts.join(" "),
-      translation: heading[2] ?? "",
-    };
-  }
-  return null;
+  flush();
+  return contexts;
 }
 
 export function needsNoteTitle(template: string): boolean {

@@ -174,7 +174,9 @@ to a verse after you have inserted a passage. Put the cursor on the verse you
 want to annotate, or select one or more verses, and run the command: it reads
 the reference and its heading, creates a note and embeds it in a `zettel`
 callout just below the quote. A selection spanning several verses becomes a
-range such as `Johannes 3,16-18`.
+range such as `Johannes 3,16-18`. A selection that spans several chapters is
+split per chapter, so each chapter gets its own note and callout, for example
+`Markus 1,43-44` and `Lukas 1,1-2` from a selection over both.
 
 ```markdown
 > **16** Denn so hat Gott die Welt geliebt …

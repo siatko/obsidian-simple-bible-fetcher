@@ -9,7 +9,7 @@ import {
   needsNoteTitle,
   parseNoteColors,
   parseReference,
-  parseVerseContext,
+  parseVerseContexts,
   QuoteStyle,
   renderNotePath,
   searchBible,
@@ -85,10 +85,10 @@ describe("parseReference", () => {
   });
 });
 
-describe("parseVerseContext", () => {
+describe("parseVerseContexts", () => {
   it("reads the verse and the heading above it", () => {
     expect(
-      parseVerseContext(
+      parseVerseContexts(
         [
           "> **Johannes 3,16** (Schlachter 2000)",
           ">",
@@ -96,20 +96,22 @@ describe("parseVerseContext", () => {
         ],
         2
       )
-    ).toEqual({
-      reference: "Johannes 3,16",
-      book: "Johannes",
-      chapter: 3,
-      verse: 16,
-      verses: "16",
-      text: "Denn so hat Gott die Welt geliebt.",
-      translation: "Schlachter 2000",
-    });
+    ).toEqual([
+      {
+        reference: "Johannes 3,16",
+        book: "Johannes",
+        chapter: 3,
+        verse: 16,
+        verses: "16",
+        text: "Denn so hat Gott die Welt geliebt.",
+        translation: "Schlachter 2000",
+      },
+    ]);
   });
 
   it("reads a chapter heading and a source link", () => {
     expect(
-      parseVerseContext(
+      parseVerseContexts(
         [
           "> [**Johannes 3** (Schlachter 2000)](https://bolls.life/S00/43/3/)",
           ">",
@@ -117,20 +119,22 @@ describe("parseVerseContext", () => {
         ],
         2
       )
-    ).toEqual({
-      reference: "Johannes 3,17",
-      book: "Johannes",
-      chapter: 3,
-      verse: 17,
-      verses: "17",
-      text: "Denn Gott hat seinen Sohn nicht gesandt.",
-      translation: "Schlachter 2000",
-    });
+    ).toEqual([
+      {
+        reference: "Johannes 3,17",
+        book: "Johannes",
+        chapter: 3,
+        verse: 17,
+        verses: "17",
+        text: "Denn Gott hat seinen Sohn nicht gesandt.",
+        translation: "Schlachter 2000",
+      },
+    ]);
   });
 
   it("merges a selection of consecutive verses into a range", () => {
     expect(
-      parseVerseContext(
+      parseVerseContexts(
         [
           "> **Johannes 3** (Schlachter 2000)",
           ">",
@@ -141,27 +145,88 @@ describe("parseVerseContext", () => {
         2,
         4
       )
-    ).toEqual({
-      reference: "Johannes 3,16-18",
-      book: "Johannes",
-      chapter: 3,
-      verse: 16,
-      verses: "16-18",
-      text: "one two three",
-      translation: "Schlachter 2000",
-    });
+    ).toEqual([
+      {
+        reference: "Johannes 3,16-18",
+        book: "Johannes",
+        chapter: 3,
+        verse: 16,
+        verses: "16-18",
+        text: "one two three",
+        translation: "Schlachter 2000",
+      },
+    ]);
+  });
+
+  it("splits a selection that spans several chapters into one context each", () => {
+    expect(
+      parseVerseContexts(
+        [
+          "> **Markus 1** (Schlachter 2000)",
+          ">",
+          "> **43** a",
+          "> **44** b",
+          "",
+          "> **Lukas 1** (Schlachter 2000)",
+          ">",
+          "> **1** c",
+          "> **2** d",
+        ],
+        2,
+        8
+      )
+    ).toEqual([
+      {
+        reference: "Markus 1,43-44",
+        book: "Markus",
+        chapter: 1,
+        verse: 43,
+        verses: "43-44",
+        text: "a b",
+        translation: "Schlachter 2000",
+      },
+      {
+        reference: "Lukas 1,1-2",
+        book: "Lukas",
+        chapter: 1,
+        verse: 1,
+        verses: "1-2",
+        text: "c d",
+        translation: "Schlachter 2000",
+      },
+    ]);
+  });
+
+  it("splits on a heading without a parenthetical inside the selection", () => {
+    expect(
+      parseVerseContexts(
+        ["> **Johannes 3**", ">", "> **16** one", "> **17** two"],
+        0,
+        3
+      )
+    ).toEqual([
+      {
+        reference: "Johannes 3,16-17",
+        book: "Johannes",
+        chapter: 3,
+        verse: 16,
+        verses: "16-17",
+        text: "one two",
+        translation: "",
+      },
+    ]);
   });
 
   it("leaves the translation empty without a heading parenthetical", () => {
     expect(
-      parseVerseContext(["> **Johannes 3**", ">", "> **16** text"], 2)
-        ?.translation
+      parseVerseContexts(["> **Johannes 3**", ">", "> **16** text"], 2)[0]
+        .translation
     ).toBe("");
   });
 
   it("keeps non-consecutive verses as separate parts", () => {
     expect(
-      parseVerseContext(
+      parseVerseContexts(
         [
           "> **Johannes 3** (Schlachter 2000)",
           ">",
@@ -171,47 +236,47 @@ describe("parseVerseContext", () => {
         ],
         2,
         4
-      )?.reference
+      )[0].reference
     ).toBe("Johannes 3,16.18-19");
   });
 
   it("normalises a reversed selection", () => {
     expect(
-      parseVerseContext(
+      parseVerseContexts(
         ["> **Johannes 3** (Schlachter 2000)", ">", "> **16** one", "> **17** two"],
         3,
         2
-      )?.verses
+      )[0].verses
     ).toBe("16-17");
   });
 
   it("works without a blockquote prefix", () => {
     expect(
-      parseVerseContext(
+      parseVerseContexts(
         ["**Johannes 3** (Schlachter 2000)", "", "> **16** text"],
         2
-      )?.reference
+      )[0].reference
     ).toBe("Johannes 3,16");
   });
 
-  it("returns null without a verse number on the line", () => {
+  it("returns an empty list without a verse number on the line", () => {
     expect(
-      parseVerseContext(["> **Johannes 3,16** (Schlachter 2000)"], 0)
-    ).toBeNull();
+      parseVerseContexts(["> **Johannes 3,16** (Schlachter 2000)"], 0)
+    ).toEqual([]);
   });
 
-  it("returns null without a heading above", () => {
-    expect(parseVerseContext(["> **16** text"], 0)).toBeNull();
+  it("returns an empty list without a heading above", () => {
+    expect(parseVerseContexts(["> **16** text"], 0)).toEqual([]);
   });
 
   it("skips heading-looking lines that are not references", () => {
     expect(
-      parseVerseContext(["> **Note** (x)", ">", "> **16** text"], 2)
-    ).toBeNull();
+      parseVerseContexts(["> **Note** (x)", ">", "> **16** text"], 2)
+    ).toEqual([]);
   });
 
-  it("returns null for an out-of-range line", () => {
-    expect(parseVerseContext([], 3)).toBeNull();
+  it("returns an empty list for an out-of-range line", () => {
+    expect(parseVerseContexts([], 3)).toEqual([]);
   });
 });
 
