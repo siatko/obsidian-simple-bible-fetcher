@@ -2,8 +2,6 @@
 
 # More than a<br>Simple Bible Fetcher
 
-![Simple Bible Fetcher demo](https://raw.githubusercontent.com/siatko/obsidian-simple-bible-fetcher/main/assets/demo.gif)
-
 An [Obsidian](https://obsidian.md) plugin that inserts Bible passages from the
 free [bolls.life](https://bolls.life) API as Markdown quotes, and then goes
 further: read, annotate and revisit, with colour-coded notes on any verse.
@@ -11,12 +9,13 @@ further: read, annotate and revisit, with colour-coded notes on any verse.
 </div>
 
 Type a reference, pick a translation, and the passage is inserted at the cursor
-as a blockquote, one verse per line with a bold verse number.
+as a blockquote, one verse per line with a bold verse number:
 
 ```markdown
 > **John 3,16** (The Holy Bible, Berean Standard Bible)
 >
 > **16** For God so loved the world that He gave His one and only Son, that everyone who believes in Him shall not perish but have eternal life.
+> **17** For God did not send His Son into the world to condemn the world, but to save the world through Him.
 ```
 
 Several references at once, separated by `;`:
@@ -29,6 +28,45 @@ Several references at once, separated by `;`:
 > **Psalm 23,1** (The Holy Bible, Berean Standard Bible)
 >
 > **1** The LORD is my shepherd; I shall not want.
+```
+
+A chapter range is expanded into one section per chapter:
+
+```markdown
+> **Psalm 23** (The Holy Bible, Berean Standard Bible)
+>
+> **1** The LORD is my shepherd; I shall not want.
+> **2** He makes me lie down in green pastures.
+
+> **Psalm 24** (The Holy Bible, Berean Standard Bible)
+>
+> **1** The earth is the LORD's, and everything in it.
+```
+
+Prefer running prose instead of one line per verse? Switch the format:
+
+```markdown
+> **John 3,16** (The Holy Bible, Berean Standard Bible)
+>
+> **16** For God so loved the world that He gave His one and only Son ...
+```
+
+Want the heading to link back to bolls.life? Turn on the source link:
+
+```markdown
+> [**John 3,16** (The Holy Bible, Berean Standard Bible)](https://bolls.life/BSB/43/3/16/)
+>
+> **16** For God so loved the world that He gave His one and only Son ...
+```
+
+Annotate any verse and the command creates a note for your thoughts, embedded
+under the quote as a colour-coded callout:
+
+```markdown
+> **16** For God so loved the world ...
+
+> [!zettel-yellow]
+> ![[Bible Notes/John 3,16 (The Holy Bible, Berean Standard Bible)]]
 ```
 
 ## Features
@@ -136,7 +174,7 @@ The raw bolls.life text is normalized before it is inserted:
 | Note folder           | Folder for **Annotate verse** notes, with vault-folder autocomplete. Blank means the vault root. |
 | Note format           | File name (and optional subfolders) for **Annotate verse** notes. Placeholders: `{title}`, `{reference}`, `{translation}`, `{book}`, `{chapter}`, `{verse}`, `{verses}`. A title is only asked for when the format contains `{title}`. |
 | Note opens            | Where a new annotation note opens: `Split right` (default), `New tab`, or `Do not open`. |
-| Note colors           | Post-it palette for annotation notes, one per line as `name = #hex`. The name becomes the callout type (`zettel-name`). Ten defaults are provided. |
+| Note colors           | Post-it palette for annotation notes, one per line as `name = #hex`. The name becomes the callout type (`zettel-name`) and is a free label, only the hex colour is used. Ten defaults are provided. |
 | Default note color    | Palette name preselected when creating an annotation note. |
 
 ## Custom template
@@ -189,6 +227,12 @@ The note is embedded inside a `zettel-<color>` callout, drawn as a post-it with
 an always-visible coloured border. When you create a note, the dialog offers a
 dropdown of the colours from the **Note colors** palette and preselects the
 **Default note color**.
+
+The palette names are free labels, they carry no meaning of their own: only the
+`#hex` value is used to draw the callout. So instead of colours you can name
+entries after how you use them, for example `jesus`, `god`, `good` or `bad`, each
+with the hex colour you want, and pick `bad` when you want a red note. The name
+only has to be unique within the palette.
 
 Where the note goes is set by two settings, like the Daily Notes plugin. The
 **Note folder** field has the same vault-folder autocomplete (blank means the
