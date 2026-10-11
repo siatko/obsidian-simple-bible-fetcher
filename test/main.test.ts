@@ -585,7 +585,7 @@ describe("annotate command", () => {
 
     await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalled());
     expect(editor.replaceRange).toHaveBeenCalledWith(
-      "\n\n> [!zettel-yellow]\n> ![[Bible Notes/Gottes Liebe]]",
+      "\n\n> [!zettel-yellow]\n> ![[Bible Notes/Gottes Liebe]]\n",
       { line: 2, ch: 43 }
     );
     const app = stubApp(plugin);
@@ -689,7 +689,7 @@ describe("annotate command", () => {
 
     await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalled());
     expect(editor.replaceRange).toHaveBeenCalledWith(
-      "\n\n> [!zettel-yellow]\n> ![[Bible/Johannes/3/16]]",
+      "\n\n> [!zettel-yellow]\n> ![[Bible/Johannes/3/16]]\n",
       { line: 2, ch: 43 }
     );
     const app = stubApp(plugin);
@@ -771,8 +771,37 @@ describe("annotate command", () => {
 
     await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalled());
     expect(editor.replaceRange).toHaveBeenCalledWith(
-      "\n\n> [!zettel-yellow]\n> ![[Bible Notes/Drei Verse]]",
+      "\n\n> [!zettel-yellow]\n> ![[Bible Notes/Drei Verse]]\n",
       { line: 4, ch: 14 }
+    );
+  });
+
+  it("closes the callout so the following verses stay outside it", async () => {
+    useApi();
+    const plugin = await loadPlugin({
+      noteFolder: "Bible Notes",
+      noteFormat: "{title}",
+    });
+    const editor = verseEditor(
+      [
+        "> **Johannes 3** (Schlachter 2000)",
+        ">",
+        "> **16** one",
+        "> **17** two",
+        "> **18** three",
+      ],
+      2
+    );
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+    const input = annotateInput();
+    input.value = "Mitte";
+    pressEnter(input);
+
+    await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalled());
+    expect(editor.replaceRange).toHaveBeenCalledWith(
+      "\n\n> [!zettel-yellow]\n> ![[Bible Notes/Mitte]]\n",
+      { line: 2, ch: 12 }
     );
   });
 
@@ -809,13 +838,13 @@ describe("annotate command", () => {
     await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalledTimes(2));
     expect(editor.replaceRange).toHaveBeenNthCalledWith(
       1,
-      "\n\n> [!zettel-yellow]\n> ![[Bible Notes/Markus 1,43-44 (Schlachter 2000)]]",
+      "\n\n> [!zettel-yellow]\n> ![[Bible Notes/Markus 1,43-44 (Schlachter 2000)]]\n",
       { line: 3, ch: 10 }
     );
     expect(editor.replaceRange).toHaveBeenNthCalledWith(
       2,
-      "\n\n> [!zettel-yellow]\n> ![[Bible Notes/Lukas 1,1-2 (Schlachter 2000)]]",
-      { line: 11, ch: 0 }
+      "\n\n> [!zettel-yellow]\n> ![[Bible Notes/Lukas 1,1-2 (Schlachter 2000)]]\n",
+      { line: 12, ch: 0 }
     );
     const app = stubApp(plugin);
     expect(

@@ -248,8 +248,17 @@ switches between split, new tab or not at all). Because the note is a normal fil
 you can also link to it, search it and collect it with backlinks or Dataview. If
 a note with that path already exists it is reused, not overwritten. This works
 with the `Blockquote, bold verse number` and `One blockquote per verse` formats,
-which label each verse; the running-text format has no per-verse line to anchor
-to.
+which label each verse with `**{number}**`; the running-text format has no
+per-verse line to anchor to.
+
+With a **Custom template** the command reads the rendered Markdown back, so it
+requires the same two patterns: each verse line must contain `**{number}**` (for
+example `**16** text`) and the passage heading must contain `**{reference}**`
+(optionally followed by `(translation)`, as in `**John 3,16** (BSB)`). If your
+template drops the bold verse number or the bold heading, the command finds no
+verse and shows a notice instead. The default custom template keeps both and
+works. The callout itself is a self-contained block, so it never swallows the
+verses below it, whatever the format.
 
 ## Parallel translations
 

@@ -384,7 +384,7 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
             color
           ).then((created) => {
             if (!created) return;
-            offset += 3;
+            offset += 4;
             createNext();
           });
         }
@@ -418,7 +418,7 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
       }
       const link = path.replace(/\.md$/, "");
       const target = editor.getLine(line);
-      editor.replaceRange(`\n\n> [!zettel-${color}]\n> ![[${link}]]`, {
+      editor.replaceRange(`\n\n> [!zettel-${color}]\n> ![[${link}]]\n`, {
         line,
         ch: target.length,
       });
