@@ -261,6 +261,13 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
 
     await this.loadSettings();
 
+    this.registerDomEvent(
+      activeDocument,
+      "click",
+      (event) => this.openNoteOnClick(event),
+      true
+    );
+
     this.addCommand({
       id: "insert-bible-quote",
       name: "Insert Bible quote",
@@ -439,6 +446,26 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
         ? this.app.workspace.getLeaf("tab")
         : this.app.workspace.getLeaf("split", "vertical");
     await leaf.openFile(file);
+  }
+
+  private openNoteOnClick(event: MouseEvent): void {
+    const action = this.settings.noteClick;
+    if (action === "current") return;
+    const target = event.target as Element;
+    const embed = target.closest(
+      '.callout[data-callout^="zettel-"] .internal-embed'
+    );
+    const src = embed?.getAttribute("src");
+    if (!src) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (action === "none") return;
+    const file = this.app.workspace.getActiveFile();
+    void this.app.workspace.openLinkText(
+      src,
+      file ? file.path : "",
+      action === "tab" ? "tab" : "split"
+    );
   }
 
   private async ensureFolders(path: string): Promise<void> {
@@ -651,6 +678,20 @@ class SimpleBibleFetcherSettingTab extends PluginSettingTab {
           type: "dropdown",
           key: "noteOpen",
           options: {
+            split: "Split right",
+            tab: "New tab",
+            none: "Do not open",
+          },
+        },
+      },
+      {
+        name: "Note opens on click",
+        desc: "Where an embedded annotation note opens when you click it. Current pane leaves Obsidian's default click behaviour untouched.",
+        control: {
+          type: "dropdown",
+          key: "noteClick",
+          options: {
+            current: "Current pane",
             split: "Split right",
             tab: "New tab",
             none: "Do not open",

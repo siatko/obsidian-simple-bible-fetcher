@@ -183,6 +183,7 @@ describe("plugin surface", () => {
     expect(byName("Note folder")?.control?.key).toBe("noteFolder");
     expect(byName("Note format")?.control?.key).toBe("noteFormat");
     expect(byName("Note opens")?.control?.key).toBe("noteOpen");
+    expect(byName("Note opens on click")?.control?.key).toBe("noteClick");
     expect(byName("Default note color")?.control?.key).toBe(
       "noteDefaultColor"
     );
@@ -937,5 +938,105 @@ describe("annotate command", () => {
       expect(Notice.instances.at(-1)?.message).toBe("Simple Bible Fetcher: boom")
     );
     expect(editor.replaceRange).not.toHaveBeenCalled();
+  });
+});
+
+describe("open note on click", () => {
+  function zettelEmbed(src?: string): HTMLElement {
+    const callout = document.createElement("div");
+    callout.className = "callout";
+    callout.setAttribute("data-callout", "zettel-yellow");
+    const embed = document.createElement("div");
+    embed.className = "internal-embed";
+    if (src !== undefined) embed.setAttribute("src", src);
+    callout.appendChild(embed);
+    document.body.appendChild(callout);
+    return embed;
+  }
+
+  function click(el: HTMLElement): boolean {
+    return el.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true })
+    );
+  }
+
+  it("opens the embedded note in a split", async () => {
+    useApi();
+    const plugin = await loadPlugin({ noteClick: "split" });
+    const workspace = stubApp(plugin).workspace;
+    workspace.activeFile = { path: "Notes/Current.md" };
+
+    const cancelled = click(zettelEmbed("Bible Notes/John 3,16"));
+
+    expect(cancelled).toBe(false);
+    expect(workspace.opened).toEqual([
+      {
+        link: "Bible Notes/John 3,16",
+        source: "Notes/Current.md",
+        newLeaf: "split",
+      },
+    ]);
+  });
+
+  it("opens the embedded note in a new tab when configured", async () => {
+    useApi();
+    const plugin = await loadPlugin({ noteClick: "tab" });
+    const workspace = stubApp(plugin).workspace;
+
+    click(zettelEmbed("Bible Notes/John 3,16"));
+
+    expect(workspace.opened).toEqual([
+      {
+        link: "Bible Notes/John 3,16",
+        source: "",
+        newLeaf: "tab",
+      },
+    ]);
+  });
+
+  it("swallows the click without opening when set to do not open", async () => {
+    useApi();
+    const plugin = await loadPlugin({ noteClick: "none" });
+    const workspace = stubApp(plugin).workspace;
+
+    const cancelled = click(zettelEmbed("Bible Notes/John 3,16"));
+
+    expect(cancelled).toBe(false);
+    expect(workspace.opened).toHaveLength(0);
+  });
+
+  it("leaves the click to Obsidian in the current pane", async () => {
+    useApi();
+    const plugin = await loadPlugin({ noteClick: "current" });
+    const workspace = stubApp(plugin).workspace;
+
+    const cancelled = click(zettelEmbed("Bible Notes/John 3,16"));
+
+    expect(cancelled).toBe(true);
+    expect(workspace.opened).toHaveLength(0);
+  });
+
+  it("ignores clicks outside a zettel embed", async () => {
+    useApi();
+    const plugin = await loadPlugin({ noteClick: "split" });
+    const workspace = stubApp(plugin).workspace;
+    const plain = document.createElement("div");
+    document.body.appendChild(plain);
+
+    const cancelled = click(plain);
+
+    expect(cancelled).toBe(true);
+    expect(workspace.opened).toHaveLength(0);
+  });
+
+  it("ignores a zettel embed without a source", async () => {
+    useApi();
+    const plugin = await loadPlugin({ noteClick: "split" });
+    const workspace = stubApp(plugin).workspace;
+
+    const cancelled = click(zettelEmbed());
+
+    expect(cancelled).toBe(true);
+    expect(workspace.opened).toHaveLength(0);
   });
 });

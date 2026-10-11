@@ -174,6 +174,7 @@ The raw bolls.life text is normalized before it is inserted:
 | Note folder           | Folder for **Annotate verse** notes, with vault-folder autocomplete. Blank means the vault root. |
 | Note format           | File name (and optional subfolders) for **Annotate verse** notes. Placeholders: `{title}`, `{reference}`, `{translation}`, `{book}`, `{chapter}`, `{verse}`, `{verses}`. A title is only asked for when the format contains `{title}`. |
 | Note opens            | Where a new annotation note opens: `Split right` (default), `New tab`, or `Do not open`. |
+| Note opens on click   | Where an embedded annotation note opens when you click it: `Current pane` (default, Obsidian's own behaviour), `Split right`, `New tab`, or `Do not open`. |
 | Default note color    | Colour preselected when creating an annotation note. One of the ten built-in post-it colours. |
 
 ## Custom template
@@ -244,7 +245,10 @@ note is named from the format.
 The quote stays a quote; the embedded note is your commentary and is created
 empty, so you just write. The reference already shows as the note title. The note
 opens right away, by default in a split to the right (the **Note opens** setting
-switches between split, new tab or not at all). Because the note is a normal file
+switches between split, new tab or not at all). Clicking the embedded note can
+open it in a split or a new tab too, via the **Note opens on click** setting
+(`Current pane` keeps Obsidian's own click behaviour). Because the note is a
+normal file
 you can also link to it, search it and collect it with backlinks or Dataview. If
 a note with that path already exists it is reused, not overwritten. This works
 with the `Blockquote, bold verse number` and `One blockquote per verse` formats,

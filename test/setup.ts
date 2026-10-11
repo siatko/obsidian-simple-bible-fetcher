@@ -1,5 +1,10 @@
 import { beforeEach } from "vitest";
-import { Modal, Notice, resetRequestUrlHandler } from "./obsidian-stub";
+import {
+  Modal,
+  Notice,
+  resetDomEvents,
+  resetRequestUrlHandler,
+} from "./obsidian-stub";
 import { setBibleCache } from "../src/bible";
 
 type ElOptions = {
@@ -92,9 +97,12 @@ function installDomHelpers(): void {
 
 installDomHelpers();
 
+(window as unknown as { activeDocument: Document }).activeDocument = document;
+
 beforeEach(() => {
   Modal.reset();
   Notice.reset();
+  resetDomEvents();
   resetRequestUrlHandler();
   setBibleCache(null);
 });

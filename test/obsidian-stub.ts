@@ -67,15 +67,21 @@ export class StubVault {
 }
 
 export class StubWorkspace {
-  opened: Array<{ link: string; newLeaf: boolean }> = [];
+  opened: Array<{ link: string; source: string; newLeaf: string | boolean }> =
+    [];
   openedFiles: Array<{ path: string; mode: string; direction?: string }> = [];
+  activeFile: { path: string } | null = null;
+
+  getActiveFile(): { path: string } | null {
+    return this.activeFile;
+  }
 
   async openLinkText(
     linktext: string,
-    _source: string,
-    newLeaf?: boolean
+    source: string,
+    newLeaf?: string | boolean
   ): Promise<void> {
-    this.opened.push({ link: linktext, newLeaf: Boolean(newLeaf) });
+    this.opened.push({ link: linktext, source, newLeaf: newLeaf ?? false });
   }
 
   getLeaf(
@@ -189,6 +195,34 @@ export class Plugin {
   }
 
   registerEvent(): void {}
+
+  registerDomEvent(
+    el: EventTarget,
+    type: string,
+    callback: EventListenerOrEventListenerObject,
+    options?: boolean | AddEventListenerOptions
+  ): void {
+    el.addEventListener(type, callback, options);
+    domListeners.push({ el, type, callback, options });
+  }
+}
+
+const domListeners: Array<{
+  el: EventTarget;
+  type: string;
+  callback: EventListenerOrEventListenerObject;
+  options?: boolean | AddEventListenerOptions;
+}> = [];
+
+export function resetDomEvents(): void {
+  for (const listener of domListeners) {
+    listener.el.removeEventListener(
+      listener.type,
+      listener.callback,
+      listener.options
+    );
+  }
+  domListeners.length = 0;
 }
 
 export class PluginSettingTab {

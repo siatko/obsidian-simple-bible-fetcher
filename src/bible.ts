@@ -34,10 +34,13 @@ export interface BibleSettings {
   noteFolder: string;
   noteFormat: string;
   noteOpen: NoteOpen;
+  noteClick: NoteClick;
   noteDefaultColor: string;
 }
 
 export type NoteOpen = "split" | "tab" | "none";
+
+export type NoteClick = "current" | "split" | "tab" | "none";
 
 export const DEFAULT_TEMPLATE = "> {heading}\n>\n{verses}";
 export const DEFAULT_VERSE_TEMPLATE = "> **{number}** {text}";
@@ -45,6 +48,7 @@ export const DEFAULT_VERSE_SEPARATOR = "\\n";
 export const DEFAULT_NOTE_FOLDER = "Bible Notes";
 export const DEFAULT_NOTE_FORMAT = "{title}";
 export const DEFAULT_NOTE_OPEN: NoteOpen = "split";
+export const DEFAULT_NOTE_CLICK: NoteClick = "current";
 export const NOTE_COLORS = [
   "yellow",
   "orange",
@@ -72,6 +76,7 @@ export const DEFAULT_SETTINGS: BibleSettings = {
   noteFolder: DEFAULT_NOTE_FOLDER,
   noteFormat: DEFAULT_NOTE_FORMAT,
   noteOpen: DEFAULT_NOTE_OPEN,
+  noteClick: DEFAULT_NOTE_CLICK,
   noteDefaultColor: DEFAULT_NOTE_COLOR,
 };
 
