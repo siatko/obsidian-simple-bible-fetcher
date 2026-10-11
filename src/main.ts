@@ -2,6 +2,7 @@ import {
   App,
   Editor,
   Modal,
+  normalizePath,
   Notice,
   Plugin,
   PluginSettingTab,
@@ -9,20 +10,34 @@ import {
 } from "obsidian";
 import {
   BibleSettings,
+  DEFAULT_NOTE_COLOR,
+  DEFAULT_NOTE_COLORS,
+  DEFAULT_NOTE_FORMAT,
   DEFAULT_SETTINGS,
   fetchBibleQuotes,
   listLanguages,
   listTranslations,
+  needsNoteTitle,
+  NoteColor,
+  parseNoteColors,
   parseTranslations,
+  parseVerseContext,
   QuoteStyle,
+  renderNotePath,
   SearchResult,
   searchBible,
   setBibleCache,
+  VerseContext,
 } from "./bible";
 import { CacheStorage, JsonCache } from "./cache";
 
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+export function sanitizeFileName(title: string): string {
+  const cleaned = title.replace(/[\\/:*?"<>|#^[\]]/g, "").trim();
+  return cleaned || "Note";
 }
 
 class PluginDataStorage implements CacheStorage {
@@ -73,6 +88,79 @@ class ReferenceModal extends Modal {
         if (value) this.onSubmit(value);
       }
     });
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+  }
+}
+
+class NoteTitleModal extends Modal {
+  private initial: string;
+  private needsTitle: boolean;
+  private colors: NoteColor[];
+  private defaultColor: string;
+  private onSubmit: (title: string, color: string) => void;
+
+  constructor(
+    app: App,
+    initial: string,
+    needsTitle: boolean,
+    colors: NoteColor[],
+    defaultColor: string,
+    onSubmit: (title: string, color: string) => void
+  ) {
+    super(app);
+    this.initial = initial;
+    this.needsTitle = needsTitle;
+    this.colors = colors;
+    this.defaultColor = defaultColor;
+    this.onSubmit = onSubmit;
+  }
+
+  onOpen(): void {
+    const { contentEl } = this;
+    contentEl.addClass("simple-bible-fetcher-modal");
+    contentEl.createEl("h3", { text: "Annotation note" });
+
+    let input: HTMLInputElement | null = null;
+    if (this.needsTitle) {
+      input = contentEl.createEl("input", {
+        type: "text",
+        placeholder: "Note title",
+      });
+      input.addClass("simple-bible-fetcher-input");
+      input.value = this.initial;
+      input.focus();
+      input.select();
+    }
+
+    contentEl.createEl("label", { text: "Color" });
+    const select = contentEl.createEl("select");
+    select.addClass("simple-bible-fetcher-input");
+    for (const color of this.colors) {
+      select.createEl("option", { text: color.name, value: color.name });
+    }
+    select.value = this.defaultColor;
+
+    const submit = (): void => {
+      const title = input ? input.value.trim() : "";
+      if (this.needsTitle && !title) return;
+      this.close();
+      this.onSubmit(title, select.value);
+    };
+
+    if (input) {
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          submit();
+        }
+      });
+    }
+
+    const button = contentEl.createEl("button", { text: "Create" });
+    button.addEventListener("click", submit);
   }
 
   onClose(): void {
@@ -167,6 +255,7 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
   settings: BibleSettings;
   private cache: JsonCache | null = null;
   private dataQueue: Promise<void> = Promise.resolve();
+  private colorStyles: HTMLStyleElement | null = null;
 
   async onload(): Promise<void> {
     const cache = new JsonCache(new PluginDataStorage(this));
@@ -175,6 +264,7 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
     this.cache = cache;
 
     await this.loadSettings();
+    this.applyColorStyles();
 
     this.addCommand({
       id: "insert-bible-quote",
@@ -194,11 +284,37 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
       editorCallback: (editor: Editor) => this.searchAndInsert(editor),
     });
 
+    this.addCommand({
+      id: "annotate-verse",
+      name: "Annotate verse (create note)",
+      editorCallback: (editor: Editor) => this.annotateVerse(editor),
+    });
+
     this.addSettingTab(new SimpleBibleFetcherSettingTab(this.app, this));
   }
 
   onunload(): void {
     void this.cache?.flush();
+    this.colorStyles?.remove();
+    this.colorStyles = null;
+  }
+
+  private noteColors(): NoteColor[] {
+    const colors = parseNoteColors(this.settings.noteColors);
+    return colors.length > 0 ? colors : parseNoteColors(DEFAULT_NOTE_COLORS);
+  }
+
+  private applyColorStyles(): void {
+    if (!this.colorStyles) {
+      this.colorStyles = document.createElement("style");
+      document.head.appendChild(this.colorStyles);
+    }
+    this.colorStyles.textContent = this.noteColors()
+      .map(
+        (color) =>
+          `.callout[data-callout="zettel-${color.name}"] { --callout-color: ${color.rgb}; }`
+      )
+      .join("\n");
   }
 
   private promptAndInsert(editor: Editor): void {
@@ -251,6 +367,100 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
     }
   }
 
+  private annotateVerse(editor: Editor): void {
+    const from = editor.getCursor("from");
+    const to = editor.getCursor("to");
+    const lines = Array.from({ length: editor.lineCount() }, (_, index) =>
+      editor.getLine(index)
+    );
+    const context = parseVerseContext(lines, from.line, to.line);
+    if (!context) {
+      new Notice(
+        "Simple Bible Fetcher: place the cursor on a verse inserted by the plugin, or select one or more verses.",
+        6000
+      );
+      return;
+    }
+    const insertLine = Math.max(from.line, to.line);
+    const template = this.noteTemplate();
+    const colors = this.noteColors();
+    const defaultColor = colors.some(
+      (color) => color.name === this.settings.noteDefaultColor
+    )
+      ? this.settings.noteDefaultColor
+      : colors[0].name;
+    new NoteTitleModal(
+      this.app,
+      context.translation
+        ? `${context.reference} (${context.translation})`
+        : context.reference,
+      needsNoteTitle(template),
+      colors,
+      defaultColor,
+      (title, color) => {
+        void this.createNote(editor, insertLine, context, template, title, color);
+      }
+    ).open();
+  }
+
+  private noteTemplate(): string {
+    const folder = normalizePath(this.settings.noteFolder.trim());
+    const format = this.settings.noteFormat.trim() || DEFAULT_NOTE_FORMAT;
+    return folder ? `${folder}/${format}` : format;
+  }
+
+  private async createNote(
+    editor: Editor,
+    line: number,
+    context: VerseContext,
+    template: string,
+    title: string,
+    color: string
+  ): Promise<void> {
+    try {
+      let path = normalizePath(
+        renderNotePath(template, context, sanitizeFileName(title))
+      );
+      if (!path.endsWith(".md")) path += ".md";
+      await this.ensureFolders(path);
+      if (!this.app.vault.getAbstractFileByPath(path)) {
+        await this.app.vault.create(path, "");
+      }
+      const link = path.replace(/\.md$/, "");
+      const target = editor.getLine(line);
+      editor.replaceRange(`\n\n> [!zettel-${color}]\n> ![[${link}]]`, {
+        line,
+        ch: target.length,
+      });
+      await this.openNote(path);
+    } catch (error) {
+      new Notice(`Simple Bible Fetcher: ${errorMessage(error)}`, 6000);
+    }
+  }
+
+  private async openNote(path: string): Promise<void> {
+    if (this.settings.noteOpen === "none") return;
+    const file = this.app.vault.getFileByPath(path);
+    if (!file) return;
+    const leaf =
+      this.settings.noteOpen === "tab"
+        ? this.app.workspace.getLeaf("tab")
+        : this.app.workspace.getLeaf("split", "vertical");
+    await leaf.openFile(file);
+  }
+
+  private async ensureFolders(path: string): Promise<void> {
+    const folder = path.split("/").slice(0, -1).join("/");
+    if (!folder) return;
+    let current = "";
+    for (const part of folder.split("/")) {
+      current = current ? `${current}/${part}` : part;
+      if (!this.app.vault.getAbstractFileByPath(current)) {
+        await this.app.vault.createFolder(current);
+      }
+    }
+  }
+
   async readData(): Promise<Record<string, unknown>> {
     const data: unknown = (await this.loadData()) ?? {};
     return typeof data === "object" && data !== null
@@ -280,6 +490,7 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
     await this.mutateData((data) => {
       Object.assign(data, this.settings);
     });
+    this.applyColorStyles();
   }
 }
 
@@ -425,6 +636,48 @@ class SimpleBibleFetcherSettingTab extends PluginSettingTab {
           type: "text",
           key: "parallelTranslations",
           placeholder: "LUT, ELB",
+        },
+      },
+      {
+        name: "Note folder",
+        desc: "Folder for annotation notes. Blank means the vault root.",
+        control: {
+          type: "folder",
+          key: "noteFolder",
+          placeholder: "Bible Notes",
+          includeRoot: true,
+        },
+      },
+      {
+        name: "Note format",
+        desc: "File name (and optional subfolders) for annotation notes. Placeholders: {title}, {reference}, {translation}, {book}, {chapter}, {verse}, {verses}. A title is only asked for when it contains {title}.",
+        control: { type: "text", key: "noteFormat", placeholder: "{title}" },
+      },
+      {
+        name: "Note opens",
+        desc: "Where a new annotation note opens: a split to the right, a new tab, or not at all.",
+        control: {
+          type: "dropdown",
+          key: "noteOpen",
+          options: {
+            split: "Split right",
+            tab: "New tab",
+            none: "Do not open",
+          },
+        },
+      },
+      {
+        name: "Note colors",
+        desc: "Palette for annotation notes, one per line as name = #hex. The name becomes the callout type (zettel-name).",
+        control: { type: "textarea", key: "noteColors", rows: 6 },
+      },
+      {
+        name: "Default note color",
+        desc: "Palette name preselected when creating an annotation note.",
+        control: {
+          type: "text",
+          key: "noteDefaultColor",
+          placeholder: DEFAULT_NOTE_COLOR,
         },
       },
     ];

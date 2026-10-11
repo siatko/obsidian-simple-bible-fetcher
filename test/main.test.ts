@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import SimpleBibleFetcherPlugin, { errorMessage } from "../src/main";
+import SimpleBibleFetcherPlugin, { errorMessage, sanitizeFileName } from "../src/main";
 import { parseTranslations } from "../src/bible";
 import { DEFAULT_LANGUAGES } from "./fixtures";
 import {
@@ -59,6 +59,16 @@ describe("errorMessage", () => {
     expect(errorMessage(new Error("boom"))).toBe("boom");
     expect(errorMessage("plain")).toBe("plain");
     expect(errorMessage(42)).toBe("42");
+  });
+});
+
+describe("sanitizeFileName", () => {
+  it("strips characters that are invalid in file names", () => {
+    expect(sanitizeFileName("Joh 3:16 / a?b")).toBe("Joh 316  ab");
+  });
+
+  it("falls back to a name when nothing remains", () => {
+    expect(sanitizeFileName("///")).toBe("Note");
   });
 });
 
@@ -144,8 +154,9 @@ describe("plugin surface", () => {
     plugin = await loadPlugin();
   });
 
-  it("registers its three commands and one settings tab", () => {
+  it("registers its four commands and one settings tab", () => {
     expect(plugin.commands.map((c) => c.id).sort()).toEqual([
+      "annotate-verse",
       "insert-bible-quote",
       "insert-bible-quote-parallel",
       "search-bible",
@@ -168,6 +179,13 @@ describe("plugin surface", () => {
     expect(byName("Source link")?.control?.key).toBe("includeSourceLink");
     expect(byName("Parallel translations")?.control?.key).toBe(
       "parallelTranslations"
+    );
+    expect(byName("Note folder")?.control?.key).toBe("noteFolder");
+    expect(byName("Note format")?.control?.key).toBe("noteFormat");
+    expect(byName("Note opens")?.control?.key).toBe("noteOpen");
+    expect(byName("Note colors")?.control?.key).toBe("noteColors");
+    expect(byName("Default note color")?.control?.key).toBe(
+      "noteDefaultColor"
     );
   });
 
@@ -499,5 +517,363 @@ describe("search command", () => {
         modal?.contentEl.querySelector(".simple-bible-fetcher-status")?.textContent
       ).toBe("Search failed (S00).")
     );
+  });
+});
+
+type FakeEditor = {
+  getCursor: (which?: "from" | "to") => { line: number; ch: number };
+  lineCount: () => number;
+  getLine: (line: number) => string;
+  replaceRange: ReturnType<typeof vi.fn>;
+};
+
+function verseEditor(
+  lines: string[],
+  from: number,
+  to: number = from
+): FakeEditor {
+  return {
+    getCursor: (which?: "from" | "to") => ({
+      line: which === "to" ? to : from,
+      ch: 0,
+    }),
+    lineCount: () => lines.length,
+    getLine: (index: number) => lines[index] ?? "",
+    replaceRange: vi.fn(),
+  };
+}
+
+function stubApp(plugin: TestPlugin): App {
+  return plugin.app as unknown as App;
+}
+
+function annotateInput(): HTMLInputElement {
+  const modal = Modal.instances.at(-1);
+  return modal?.contentEl.querySelector("input") as HTMLInputElement;
+}
+
+function annotateSelect(): HTMLSelectElement {
+  const modal = Modal.instances.at(-1);
+  return modal?.contentEl.querySelector("select") as HTMLSelectElement;
+}
+
+function annotateButton(): HTMLButtonElement {
+  const modal = Modal.instances.at(-1);
+  return modal?.contentEl.querySelector("button") as HTMLButtonElement;
+}
+
+describe("annotate command", () => {
+  const chapter = [
+    "> **Johannes 3,16** (Schlachter 2000)",
+    ">",
+    "> **16** Denn so hat Gott die Welt geliebt.",
+  ];
+
+  it("creates a note from the path template and embeds it", async () => {
+    useApi();
+    const plugin = await loadPlugin({
+      noteFolder: "Bible Notes",
+      noteFormat: "{title}",
+    });
+    const editor = verseEditor(chapter, 2);
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+    const input = annotateInput();
+    expect(input.value).toBe("Johannes 3,16 (Schlachter 2000)");
+    expect(annotateSelect().value).toBe("yellow");
+    input.value = "Gottes Liebe";
+    pressEnter(input);
+
+    await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalled());
+    expect(editor.replaceRange).toHaveBeenCalledWith(
+      "\n\n> [!zettel-yellow]\n> ![[Bible Notes/Gottes Liebe]]",
+      { line: 2, ch: 43 }
+    );
+    const app = stubApp(plugin);
+    expect([...app.vault.folders]).toEqual(["Bible Notes"]);
+    expect(app.vault.files.get("Bible Notes/Gottes Liebe.md")).toBe("");
+    expect(app.workspace.openedFiles).toEqual([
+      {
+        path: "Bible Notes/Gottes Liebe.md",
+        mode: "split",
+        direction: "vertical",
+      },
+    ]);
+  });
+
+  it("opens the note in a new tab when configured", async () => {
+    useApi();
+    const plugin = await loadPlugin({
+      noteFolder: "Bible Notes",
+      noteFormat: "{title}",
+      noteOpen: "tab",
+    });
+    const editor = verseEditor(chapter, 2);
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+    annotateInput().value = "Tab";
+    pressEnter(annotateInput());
+
+    await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalled());
+    const opened = stubApp(plugin).workspace.openedFiles;
+    expect(opened.at(-1)?.path).toBe("Bible Notes/Tab.md");
+    expect(opened.at(-1)?.mode).toBe("tab");
+  });
+
+  it("does not open the note when configured to not open", async () => {
+    useApi();
+    const plugin = await loadPlugin({
+      noteFolder: "Bible Notes",
+      noteFormat: "{title}",
+      noteOpen: "none",
+    });
+    const editor = verseEditor(chapter, 2);
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+    annotateInput().value = "NoOpen";
+    pressEnter(annotateInput());
+
+    await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalled());
+    expect(stubApp(plugin).workspace.openedFiles).toHaveLength(0);
+  });
+
+  it("does not open a note that cannot be resolved", async () => {
+    useApi();
+    const plugin = await loadPlugin({
+      noteFolder: "Bible Notes",
+      noteFormat: "{title}",
+    });
+    const app = stubApp(plugin);
+    vi.spyOn(app.vault, "getFileByPath").mockReturnValue(null);
+    const editor = verseEditor(chapter, 2);
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+    annotateInput().value = "Missing";
+    pressEnter(annotateInput());
+
+    await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalled());
+    expect(app.workspace.openedFiles).toHaveLength(0);
+  });
+
+  it("uses the chosen color in the callout type", async () => {
+    useApi();
+    const plugin = await loadPlugin({
+      noteFolder: "Bible Notes",
+      noteFormat: "{title}",
+    });
+    const editor = verseEditor(chapter, 2);
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+    const input = annotateInput();
+    input.value = "Farbig";
+    annotateSelect().value = "blue";
+    pressEnter(input);
+
+    await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalled());
+    expect(editor.replaceRange.mock.calls[0][0]).toContain(
+      "> [!zettel-blue]"
+    );
+  });
+
+  it("builds nested folders and skips the title prompt", async () => {
+    useApi();
+    const plugin = await loadPlugin({
+      noteFolder: "Bible",
+      noteFormat: "{book}/{chapter}/{verse}",
+    });
+    const editor = verseEditor(chapter, 2);
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+    const modal = Modal.instances.at(-1);
+    expect(modal?.contentEl.querySelector("input")).toBeNull();
+    annotateButton().click();
+
+    await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalled());
+    expect(editor.replaceRange).toHaveBeenCalledWith(
+      "\n\n> [!zettel-yellow]\n> ![[Bible/Johannes/3/16]]",
+      { line: 2, ch: 43 }
+    );
+    const app = stubApp(plugin);
+    expect([...app.vault.folders]).toEqual([
+      "Bible",
+      "Bible/Johannes",
+      "Bible/Johannes/3",
+    ]);
+    expect(app.vault.files.has("Bible/Johannes/3/16.md")).toBe(true);
+  });
+
+  it("creates the note at the vault root for a blank folder", async () => {
+    useApi();
+    const plugin = await loadPlugin({ noteFolder: "", noteFormat: "{title}" });
+    const editor = verseEditor(chapter, 2);
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+    const input = annotateInput();
+    input.value = "Root note";
+    pressEnter(input);
+
+    await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalled());
+    const app = stubApp(plugin);
+    expect(app.vault.folders.size).toBe(0);
+    expect(app.vault.files.has("Root note.md")).toBe(true);
+  });
+
+  it("falls back to the default format when blank", async () => {
+    useApi();
+    const plugin = await loadPlugin({
+      noteFolder: "Bible Notes",
+      noteFormat: "  ",
+    });
+    const editor = verseEditor(chapter, 2);
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+    const input = annotateInput();
+    input.value = "Fallback";
+    pressEnter(input);
+
+    await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalled());
+    expect(
+      stubApp(plugin).vault.files.has("Bible Notes/Fallback.md")
+    ).toBe(true);
+  });
+
+  it("falls back to the built-in palette when note colors are blank", async () => {
+    useApi();
+    const plugin = await loadPlugin({ noteColors: "   " });
+    const editor = verseEditor(chapter, 2);
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+    const input = annotateInput();
+    input.value = "Palette";
+    pressEnter(input);
+
+    await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalled());
+    expect(editor.replaceRange.mock.calls[0][0]).toContain(
+      "> [!zettel-yellow]"
+    );
+  });
+
+  it("falls back to the first color when the default is unknown", async () => {
+    useApi();
+    const plugin = await loadPlugin({ noteDefaultColor: "nope" });
+    const editor = verseEditor(chapter, 2);
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+    expect(annotateSelect().value).toBe("yellow");
+  });
+
+  it("annotates a selection of several verses as a range", async () => {
+    useApi();
+    const plugin = await loadPlugin({
+      noteFolder: "Bible Notes",
+      noteFormat: "{title}",
+    });
+    const editor = verseEditor(
+      [
+        "> **Johannes 3** (Schlachter 2000)",
+        ">",
+        "> **16** one",
+        "> **17** two",
+        "> **18** three",
+      ],
+      2,
+      4
+    );
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+    const input = annotateInput();
+    expect(input.value).toBe("Johannes 3,16-18 (Schlachter 2000)");
+    input.value = "Drei Verse";
+    pressEnter(input);
+
+    await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalled());
+    expect(editor.replaceRange).toHaveBeenCalledWith(
+      "\n\n> [!zettel-yellow]\n> ![[Bible Notes/Drei Verse]]",
+      { line: 4, ch: 14 }
+    );
+  });
+
+  it("uses just the reference as the title without a translation", async () => {
+    useApi();
+    const plugin = await loadPlugin({
+      noteFolder: "Bible Notes",
+      noteFormat: "{title}",
+    });
+    const editor = verseEditor(
+      ["> **Johannes 3**", ">", "> **16** text"],
+      2
+    );
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+    expect(annotateInput().value).toBe("Johannes 3,16");
+  });
+
+  it("warns when the cursor is not on a verse", async () => {
+    useApi();
+    const plugin = await loadPlugin();
+    const editor = verseEditor(
+      ["> **Johannes 3** (Schlachter 2000)", ">", "plain text"],
+      2
+    );
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+
+    expect(Notice.instances.at(-1)?.message).toMatch(/place the cursor/);
+    expect(Modal.instances).toHaveLength(0);
+  });
+
+  it("reuses an existing note without overwriting it", async () => {
+    useApi();
+    const plugin = await loadPlugin({
+      noteFolder: "Bible Notes",
+      noteFormat: "{title}",
+    });
+    const app = stubApp(plugin);
+    app.vault.folders.add("Bible Notes");
+    app.vault.files.set("Bible Notes/Gottes Liebe.md", "existing");
+    const editor = verseEditor(chapter, 2);
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+    const input = annotateInput();
+    input.value = "Gottes Liebe";
+    pressEnter(input);
+
+    await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalled());
+    expect(app.vault.files.get("Bible Notes/Gottes Liebe.md")).toBe("existing");
+  });
+
+  it("keeps the modal open when the note title is empty", async () => {
+    useApi();
+    const plugin = await loadPlugin();
+    const editor = verseEditor(chapter, 2);
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+    annotateInput().value = "";
+    pressEnter(annotateInput());
+
+    await Promise.resolve();
+    expect(editor.replaceRange).not.toHaveBeenCalled();
+    expect(Modal.instances.at(-1)?.closed).toBe(false);
+  });
+
+  it("shows a notice when the note cannot be created", async () => {
+    useApi();
+    const plugin = await loadPlugin({
+      noteFolder: "Bible Notes",
+      noteFormat: "{title}",
+    });
+    const app = stubApp(plugin);
+    vi.spyOn(app.vault, "createFolder").mockRejectedValue(new Error("boom"));
+    const editor = verseEditor(chapter, 2);
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+    const input = annotateInput();
+    input.value = "X";
+    pressEnter(input);
+
+    await vi.waitFor(() =>
+      expect(Notice.instances.at(-1)?.message).toBe("Simple Bible Fetcher: boom")
+    );
+    expect(editor.replaceRange).not.toHaveBeenCalled();
   });
 });

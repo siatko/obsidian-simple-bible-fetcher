@@ -31,11 +31,34 @@ export interface BibleSettings {
   verseTemplate: string;
   verseSeparator: string;
   parallelTranslations: string;
+  noteFolder: string;
+  noteFormat: string;
+  noteOpen: NoteOpen;
+  noteColors: string;
+  noteDefaultColor: string;
 }
+
+export type NoteOpen = "split" | "tab" | "none";
 
 export const DEFAULT_TEMPLATE = "> {heading}\n>\n{verses}";
 export const DEFAULT_VERSE_TEMPLATE = "> **{number}** {text}";
 export const DEFAULT_VERSE_SEPARATOR = "\\n";
+export const DEFAULT_NOTE_FOLDER = "Bible Notes";
+export const DEFAULT_NOTE_FORMAT = "{title}";
+export const DEFAULT_NOTE_OPEN: NoteOpen = "split";
+export const DEFAULT_NOTE_COLORS = [
+  "yellow = #d4a017",
+  "orange = #e07b39",
+  "red = #d64545",
+  "green = #4c9a52",
+  "teal = #3aa3a3",
+  "blue = #4a7fd6",
+  "purple = #8a5cd6",
+  "pink = #d65c9a",
+  "gray = #8a8a8a",
+  "brown = #9a6b4c",
+].join("\n");
+export const DEFAULT_NOTE_COLOR = "yellow";
 
 export const DEFAULT_SETTINGS: BibleSettings = {
   translation: "S00",
@@ -47,7 +70,32 @@ export const DEFAULT_SETTINGS: BibleSettings = {
   verseTemplate: DEFAULT_VERSE_TEMPLATE,
   verseSeparator: DEFAULT_VERSE_SEPARATOR,
   parallelTranslations: "",
+  noteFolder: DEFAULT_NOTE_FOLDER,
+  noteFormat: DEFAULT_NOTE_FORMAT,
+  noteOpen: DEFAULT_NOTE_OPEN,
+  noteColors: DEFAULT_NOTE_COLORS,
+  noteDefaultColor: DEFAULT_NOTE_COLOR,
 };
+
+export interface NoteColor {
+  name: string;
+  hex: string;
+  rgb: string;
+}
+
+export function parseNoteColors(value: string): NoteColor[] {
+  const colors: NoteColor[] = [];
+  for (const line of value.split("\n")) {
+    const match = line.match(/^\s*([\w-]+)\s*=\s*#?([0-9a-fA-F]{6})\s*$/);
+    if (!match) continue;
+    const hex = match[2].toLowerCase();
+    const rgb = [0, 2, 4]
+      .map((index) => parseInt(hex.slice(index, index + 2), 16))
+      .join(", ");
+    colors.push({ name: match[1], hex: `#${hex}`, rgb });
+  }
+  return colors;
+}
 
 const API_BASE = "https://bolls.life";
 
@@ -396,6 +444,89 @@ export function parseReference(reference: string): ParsedReference | null {
     chapterEnd,
     spec,
   };
+}
+
+export interface VerseContext {
+  reference: string;
+  book: string;
+  chapter: number;
+  verse: number;
+  verses: string;
+  text: string;
+  translation: string;
+}
+
+const HEADING_LABEL = /^\s*>?\s*\[?\*\*([^*]+)\*\*(?:\s*\(([^)]*)\))?/;
+const VERSE_LABEL = /\*\*(\d+)\*\*/;
+const VERSE_TEXT = /\*\*\d+\*\*\s*(.*)$/;
+
+function numberRanges(numbers: number[]): VerseSpec {
+  const sorted = [...new Set(numbers)].sort((a, b) => a - b);
+  const ranges: VerseSpec = [];
+  for (const number of sorted) {
+    const last = ranges[ranges.length - 1];
+    if (last && number === last[1] + 1) last[1] = number;
+    else ranges.push([number, number]);
+  }
+  return ranges;
+}
+
+export function parseVerseContext(
+  lines: string[],
+  fromLine: number,
+  toLine: number = fromLine
+): VerseContext | null {
+  const first = Math.min(fromLine, toLine);
+  const last = Math.max(fromLine, toLine);
+  const numbers: number[] = [];
+  const texts: string[] = [];
+  for (let index = first; index <= last; index += 1) {
+    const line = lines[index] ?? "";
+    const match = line.match(VERSE_LABEL);
+    if (!match) continue;
+    numbers.push(parseInt(match[1], 10));
+    const body = line.match(VERSE_TEXT);
+    if (body) texts.push(body[1].trim());
+  }
+  if (numbers.length === 0) return null;
+  for (let index = first - 1; index >= 0; index -= 1) {
+    const heading = lines[index].match(HEADING_LABEL);
+    if (!heading) continue;
+    const parsed = parseReference(heading[1]);
+    if (!parsed) continue;
+    const spec = numberRanges(numbers);
+    return {
+      reference: formatReference(parsed.book, parsed.chapter, spec),
+      book: parsed.book,
+      chapter: parsed.chapter,
+      verse: spec[0][0],
+      verses: spec.map(formatRange).join("."),
+      text: texts.join(" "),
+      translation: heading[2] ?? "",
+    };
+  }
+  return null;
+}
+
+export function needsNoteTitle(template: string): boolean {
+  return template.includes("{title}");
+}
+
+export function renderNotePath(
+  template: string,
+  context: VerseContext,
+  title: string
+): string {
+  return applyTemplate(template, {
+    title,
+    reference: context.reference,
+    book: context.book,
+    chapter: String(context.chapter),
+    verse: String(context.verse),
+    verses: context.verses,
+    text: context.text,
+    translation: context.translation,
+  });
 }
 
 function toMarkdown(text: string): string {

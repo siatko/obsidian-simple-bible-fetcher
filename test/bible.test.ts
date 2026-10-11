@@ -6,8 +6,12 @@ import {
   fetchBibleQuotes,
   listLanguages,
   listTranslations,
+  needsNoteTitle,
+  parseNoteColors,
   parseReference,
+  parseVerseContext,
   QuoteStyle,
+  renderNotePath,
   searchBible,
   setBibleCache,
   splitReferences,
@@ -78,6 +82,186 @@ describe("parseReference", () => {
 
   it("returns null for input without a chapter", () => {
     expect(parseReference("Johannes")).toBeNull();
+  });
+});
+
+describe("parseVerseContext", () => {
+  it("reads the verse and the heading above it", () => {
+    expect(
+      parseVerseContext(
+        [
+          "> **Johannes 3,16** (Schlachter 2000)",
+          ">",
+          "> **16** Denn so hat Gott die Welt geliebt.",
+        ],
+        2
+      )
+    ).toEqual({
+      reference: "Johannes 3,16",
+      book: "Johannes",
+      chapter: 3,
+      verse: 16,
+      verses: "16",
+      text: "Denn so hat Gott die Welt geliebt.",
+      translation: "Schlachter 2000",
+    });
+  });
+
+  it("reads a chapter heading and a source link", () => {
+    expect(
+      parseVerseContext(
+        [
+          "> [**Johannes 3** (Schlachter 2000)](https://bolls.life/S00/43/3/)",
+          ">",
+          "> **17** Denn Gott hat seinen Sohn nicht gesandt.",
+        ],
+        2
+      )
+    ).toEqual({
+      reference: "Johannes 3,17",
+      book: "Johannes",
+      chapter: 3,
+      verse: 17,
+      verses: "17",
+      text: "Denn Gott hat seinen Sohn nicht gesandt.",
+      translation: "Schlachter 2000",
+    });
+  });
+
+  it("merges a selection of consecutive verses into a range", () => {
+    expect(
+      parseVerseContext(
+        [
+          "> **Johannes 3** (Schlachter 2000)",
+          ">",
+          "> **16** one",
+          "> **17** two",
+          "> **18** three",
+        ],
+        2,
+        4
+      )
+    ).toEqual({
+      reference: "Johannes 3,16-18",
+      book: "Johannes",
+      chapter: 3,
+      verse: 16,
+      verses: "16-18",
+      text: "one two three",
+      translation: "Schlachter 2000",
+    });
+  });
+
+  it("leaves the translation empty without a heading parenthetical", () => {
+    expect(
+      parseVerseContext(["> **Johannes 3**", ">", "> **16** text"], 2)
+        ?.translation
+    ).toBe("");
+  });
+
+  it("keeps non-consecutive verses as separate parts", () => {
+    expect(
+      parseVerseContext(
+        [
+          "> **Johannes 3** (Schlachter 2000)",
+          ">",
+          "> **16** one",
+          "> **18** three",
+          "> **19** four",
+        ],
+        2,
+        4
+      )?.reference
+    ).toBe("Johannes 3,16.18-19");
+  });
+
+  it("normalises a reversed selection", () => {
+    expect(
+      parseVerseContext(
+        ["> **Johannes 3** (Schlachter 2000)", ">", "> **16** one", "> **17** two"],
+        3,
+        2
+      )?.verses
+    ).toBe("16-17");
+  });
+
+  it("works without a blockquote prefix", () => {
+    expect(
+      parseVerseContext(
+        ["**Johannes 3** (Schlachter 2000)", "", "> **16** text"],
+        2
+      )?.reference
+    ).toBe("Johannes 3,16");
+  });
+
+  it("returns null without a verse number on the line", () => {
+    expect(
+      parseVerseContext(["> **Johannes 3,16** (Schlachter 2000)"], 0)
+    ).toBeNull();
+  });
+
+  it("returns null without a heading above", () => {
+    expect(parseVerseContext(["> **16** text"], 0)).toBeNull();
+  });
+
+  it("skips heading-looking lines that are not references", () => {
+    expect(
+      parseVerseContext(["> **Note** (x)", ">", "> **16** text"], 2)
+    ).toBeNull();
+  });
+
+  it("returns null for an out-of-range line", () => {
+    expect(parseVerseContext([], 3)).toBeNull();
+  });
+});
+
+describe("needsNoteTitle", () => {
+  it("detects the {title} placeholder", () => {
+    expect(needsNoteTitle("Bible Notes/{title}")).toBe(true);
+    expect(needsNoteTitle("Bible Notes/{reference}")).toBe(false);
+  });
+});
+
+describe("parseNoteColors", () => {
+  it("parses name = #hex lines into colors", () => {
+    expect(parseNoteColors("yellow = #d4a017\nblue = 4a7fd6")).toEqual([
+      { name: "yellow", hex: "#d4a017", rgb: "212, 160, 23" },
+      { name: "blue", hex: "#4a7fd6", rgb: "74, 127, 214" },
+    ]);
+  });
+
+  it("skips blank and malformed lines", () => {
+    expect(parseNoteColors("\nnot a color\nred=#ff0000")).toEqual([
+      { name: "red", hex: "#ff0000", rgb: "255, 0, 0" },
+    ]);
+  });
+});
+
+describe("renderNotePath", () => {
+  const context = {
+    reference: "Johannes 3,16-18",
+    book: "Johannes",
+    chapter: 3,
+    verse: 16,
+    verses: "16-18",
+    text: "one two three",
+    translation: "Schlachter 2000",
+  };
+
+  it("fills every placeholder", () => {
+    expect(
+      renderNotePath(
+        "{book}/{chapter}/{verse} {verses} {reference} {translation} {text}",
+        context,
+        "T"
+      )
+    ).toBe("Johannes/3/16 16-18 Johannes 3,16-18 Schlachter 2000 one two three");
+  });
+
+  it("fills the title placeholder", () => {
+    expect(renderNotePath("Notes/{title}", context, "Gottes Liebe")).toBe(
+      "Notes/Gottes Liebe"
+    );
   });
 });
 

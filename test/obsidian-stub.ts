@@ -36,8 +36,64 @@ export function normalizePath(path: string): string {
   return path.replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\/|\/$/g, "");
 }
 
+export class StubVault {
+  configDir = ".obsidian";
+  adapter = {};
+  files = new Map<string, string>();
+  folders = new Set<string>();
+
+  getAbstractFileByPath(path: string): { path: string } | null {
+    const normalized = normalizePath(path);
+    if (this.files.has(normalized) || this.folders.has(normalized)) {
+      return { path: normalized };
+    }
+    return null;
+  }
+
+  getFileByPath(path: string): { path: string } | null {
+    const normalized = normalizePath(path);
+    return this.files.has(normalized) ? { path: normalized } : null;
+  }
+
+  async createFolder(path: string): Promise<void> {
+    this.folders.add(normalizePath(path));
+  }
+
+  async create(path: string, content: string): Promise<{ path: string }> {
+    const normalized = normalizePath(path);
+    this.files.set(normalized, content);
+    return { path: normalized };
+  }
+}
+
+export class StubWorkspace {
+  opened: Array<{ link: string; newLeaf: boolean }> = [];
+  openedFiles: Array<{ path: string; mode: string; direction?: string }> = [];
+
+  async openLinkText(
+    linktext: string,
+    _source: string,
+    newLeaf?: boolean
+  ): Promise<void> {
+    this.opened.push({ link: linktext, newLeaf: Boolean(newLeaf) });
+  }
+
+  getLeaf(
+    type?: string,
+    direction?: string
+  ): { openFile: (file: { path: string }) => Promise<void> } {
+    const openedFiles = this.openedFiles;
+    return {
+      async openFile(file: { path: string }): Promise<void> {
+        openedFiles.push({ path: file.path, mode: type ?? "default", direction });
+      },
+    };
+  }
+}
+
 export class App {
-  vault = { configDir: ".obsidian", adapter: {} };
+  vault = new StubVault();
+  workspace = new StubWorkspace();
 }
 
 export interface Editor {

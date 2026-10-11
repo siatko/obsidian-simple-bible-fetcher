@@ -1,9 +1,14 @@
-# Simple Bible Fetcher
+<div align="center">
+
+# More than a<br>Simple Bible Fetcher
 
 ![Simple Bible Fetcher demo](https://raw.githubusercontent.com/siatko/obsidian-simple-bible-fetcher/main/assets/demo.gif)
 
 An [Obsidian](https://obsidian.md) plugin that inserts Bible passages from the
-free [bolls.life](https://bolls.life) API as Markdown quotes.
+free [bolls.life](https://bolls.life) API as Markdown quotes, and then goes
+further: read, annotate and revisit, with colour-coded notes on any verse.
+
+</div>
 
 Type a reference, pick a translation, and the passage is inserted at the cursor
 as a blockquote, one verse per line with a bold verse number.
@@ -36,6 +41,8 @@ Several references at once, separated by `;`:
 - Footnotes from the source are rendered as Markdown footnotes.
 - Three preset output formats, a custom template, and an optional source link.
 - Keyword search across a translation, inserting the passage you pick.
+- Annotate a verse: create a separate note for your thoughts and embed it
+  under the verse.
 - Parallel translations: the main translation plus any number of additional
   translations at once.
 - Every language offered by bolls.life, with the translation list and
@@ -64,6 +71,10 @@ German and English additionally understand common abbreviations
      **Parallel translations**.
    - **Simple Bible Fetcher: Search Bible (keyword)**: search the selected
      translation for a word or phrase and pick a hit to insert.
+   - **Simple Bible Fetcher: Annotate verse (create note)**: put the cursor on
+     an inserted verse, or select one or more verses, then name the note and
+     pick a colour; it is created and embedded under the last selected verse
+     (see below).
 3. Enter a reference (or search term) and press `Enter`.
 
 ### Reference syntax
@@ -122,6 +133,11 @@ The raw bolls.life text is normalized before it is inserted:
 | Footnotes             | Render source footnotes as Markdown footnotes, or strip the markers. |
 | Source link           | Make the heading itself link to the passage on bolls.life. |
 | Parallel translations | Additional translations inserted after the main one, comma-separated (e.g. `LUT, ELB`). The main translation is always included first (see below). |
+| Note folder           | Folder for **Annotate verse** notes, with vault-folder autocomplete. Blank means the vault root. |
+| Note format           | File name (and optional subfolders) for **Annotate verse** notes. Placeholders: `{title}`, `{reference}`, `{translation}`, `{book}`, `{chapter}`, `{verse}`, `{verses}`. A title is only asked for when the format contains `{title}`. |
+| Note opens            | Where a new annotation note opens: `Split right` (default), `New tab`, or `Do not open`. |
+| Note colors           | Post-it palette for annotation notes, one per line as `name = #hex`. The name becomes the callout type (`zettel-name`). Ten defaults are provided. |
+| Default note color    | Palette name preselected when creating an annotation note. |
 
 ## Custom template
 
@@ -150,6 +166,47 @@ The **Search Bible (keyword)** command searches the whole selected translation
 for a word or phrase. Matches are listed with their reference and a short text
 preview in which the search term is highlighted, up to 100 results. Picking one
 inserts that passage with the current format settings.
+
+## Annotating verses
+
+The **Annotate verse (create note)** command lets you attach your own thoughts
+to a verse after you have inserted a passage. Put the cursor on the verse you
+want to annotate, or select one or more verses, and run the command: it reads
+the reference and its heading, creates a note and embeds it in a `zettel`
+callout just below the quote. A selection spanning several verses becomes a
+range such as `Johannes 3,16-18`.
+
+```markdown
+> **16** Denn so hat Gott die Welt geliebt …
+
+> [!zettel-yellow]
+> ![[Bible Notes/Johannes 3,16 (Schlachter 2000)]]
+```
+
+The note is embedded inside a `zettel-<color>` callout, drawn as a post-it with
+an always-visible coloured border. When you create a note, the dialog offers a
+dropdown of the colours from the **Note colors** palette and preselects the
+**Default note color**.
+
+Where the note goes is set by two settings, like the Daily Notes plugin. The
+**Note folder** field has the same vault-folder autocomplete (blank means the
+vault root), and **Note format** is the file name, which understands `{title}`,
+`{reference}`, `{translation}`, `{book}`, `{chapter}`, `{verse}` and `{verses}` and
+may contain subfolders, for example `{book}/{chapter}/{reference}`. The default
+format is `{title}`. When it contains `{title}` the command asks for a title
+(prefilled with the reference and the translation, e.g.
+`Johannes 3,16 (Schlachter 2000)`); without `{title}` no title is asked and the
+note is named from the format.
+
+The quote stays a quote; the embedded note is your commentary and is created
+empty, so you just write. The reference already shows as the note title. The note
+opens right away, by default in a split to the right (the **Note opens** setting
+switches between split, new tab or not at all). Because the note is a normal file
+you can also link to it, search it and collect it with backlinks or Dataview. If
+a note with that path already exists it is reused, not overwritten. This works
+with the `Blockquote, bold verse number` and `One blockquote per verse` formats,
+which label each verse; the running-text format has no per-verse line to anchor
+to.
 
 ## Parallel translations
 

@@ -39,3 +39,45 @@
   border-radius: 2px;
   padding: 0 1px;
 }
+
+.callout[data-callout^="zettel"] {
+  --callout-icon: lucide-sticky-note;
+  --callout-border-width: 2px;
+  --callout-border-opacity: 1;
+  border: 2px solid rgb(var(--callout-color));
+}
+
+.callout[data-callout^="zettel"] .callout-title-inner {
+  display: none;
+}
+
+.callout[data-callout^="zettel"] .markdown-embed,
+.callout[data-callout^="zettel"] .internal-embed {
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+.callout[data-callout="zettel"] {
+  --callout-color: 255, 208, 0;
+}
+
+.simple-bible-fetcher-modal h3 {
+  margin: 0 0 0.75em;
+}
+
+.simple-bible-fetcher-modal label {
+  display: block;
+  margin: 0.5em 0 0.25em;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.simple-bible-fetcher-modal select {
+  width: 100%;
+  margin-bottom: 1em;
+}
+
+.simple-bible-fetcher-modal button {
+  margin-top: 0.25em;
+}
