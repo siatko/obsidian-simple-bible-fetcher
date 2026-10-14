@@ -4,22 +4,26 @@ import {
   Modal,
   normalizePath,
   Notice,
+  OpenViewState,
   Plugin,
   PluginSettingTab,
   SettingDefinitionItem,
 } from "obsidian";
 import {
   BibleSettings,
+  DEFAULT_NOTE_DATE_FORMAT,
   DEFAULT_NOTE_FORMAT,
   DEFAULT_SETTINGS,
   fetchBibleQuotes,
   listLanguages,
   listTranslations,
   needsNoteTitle,
+  NoteColorPicker,
   NOTE_COLORS,
   parseTranslations,
   parseVerseContexts,
   QuoteStyle,
+  renderNoteContent,
   renderNotePath,
   SearchResult,
   searchBible,
@@ -97,6 +101,7 @@ class NoteTitleModal extends Modal {
   private needsTitle: boolean;
   private colors: string[];
   private defaultColor: string;
+  private picker: NoteColorPicker;
   private onSubmit: (title: string, color: string) => void;
 
   constructor(
@@ -105,6 +110,7 @@ class NoteTitleModal extends Modal {
     needsTitle: boolean,
     colors: string[],
     defaultColor: string,
+    picker: NoteColorPicker,
     onSubmit: (title: string, color: string) => void
   ) {
     super(app);
@@ -112,6 +118,7 @@ class NoteTitleModal extends Modal {
     this.needsTitle = needsTitle;
     this.colors = colors;
     this.defaultColor = defaultColor;
+    this.picker = picker;
     this.onSubmit = onSubmit;
   }
 
@@ -133,18 +140,44 @@ class NoteTitleModal extends Modal {
     }
 
     contentEl.createEl("label", { text: "Color" });
-    const select = contentEl.createEl("select");
-    select.addClass("simple-bible-fetcher-input");
-    for (const color of this.colors) {
-      select.createEl("option", { text: color, value: color });
+    let selectedColor = this.defaultColor;
+    let select: HTMLSelectElement | null = null;
+    if (this.picker === "palette") {
+      const palette = contentEl.createDiv({
+        cls: "simple-bible-fetcher-swatches",
+      });
+      for (const color of this.colors) {
+        const swatch = palette.createEl("button", {
+          cls: "simple-bible-fetcher-swatch",
+          attr: {
+            type: "button",
+            "data-color": color,
+            "aria-label": color,
+            title: color,
+          },
+        });
+        if (color === this.defaultColor) swatch.addClass("is-selected");
+        swatch.addEventListener("click", () => {
+          selectedColor = color;
+          for (const node of Array.from(palette.children)) {
+            (node as HTMLElement).toggleClass("is-selected", node === swatch);
+          }
+        });
+      }
+    } else {
+      select = contentEl.createEl("select");
+      select.addClass("simple-bible-fetcher-input");
+      for (const color of this.colors) {
+        select.createEl("option", { text: color, value: color });
+      }
+      select.value = this.defaultColor;
     }
-    select.value = this.defaultColor;
 
     const submit = (): void => {
       const title = input ? input.value.trim() : "";
       if (this.needsTitle && !title) return;
       this.close();
-      this.onSubmit(title, select.value);
+      this.onSubmit(title, select ? select.value : selectedColor);
     };
 
     if (input) {
@@ -381,6 +414,7 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
         needsNoteTitle(template),
         colors,
         defaultColor,
+        this.settings.noteColorPicker,
         (title, color) => {
           void this.createNote(
             editor,
@@ -406,6 +440,12 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
     return folder ? `${folder}/${format}` : format;
   }
 
+  private noteContent(): string {
+    if (!this.settings.noteDate) return "";
+    const format = this.settings.noteDateFormat.trim() || DEFAULT_NOTE_DATE_FORMAT;
+    return renderNoteContent(format, new Date());
+  }
+
   private async createNote(
     editor: Editor,
     line: number,
@@ -420,16 +460,20 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
       );
       if (!path.endsWith(".md")) path += ".md";
       await this.ensureFolders(path);
+      const content = this.noteContent();
+      let created = false;
       if (!this.app.vault.getAbstractFileByPath(path)) {
-        await this.app.vault.create(path, "");
+        await this.app.vault.create(path, content);
+        created = true;
       }
       const link = path.replace(/\.md$/, "");
+      const embed = this.settings.noteLink === "embed" ? "!" : "";
       const target = editor.getLine(line);
-      editor.replaceRange(`\n\n> [!zettel-${color}]\n> ![[${link}]]\n`, {
+      editor.replaceRange(`\n\n> [!zettel-${color}]\n> ${embed}[[${link}]]\n`, {
         line,
         ch: target.length,
       });
-      await this.openNote(path);
+      await this.openNote(path, created ? content : "");
       return true;
     } catch (error) {
       new Notice(`Simple Bible Fetcher: ${errorMessage(error)}`, 6000);
@@ -437,7 +481,7 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
     }
   }
 
-  private async openNote(path: string): Promise<void> {
+  private async openNote(path: string, content: string): Promise<void> {
     if (this.settings.noteOpen === "none") return;
     const file = this.app.vault.getFileByPath(path);
     if (!file) return;
@@ -445,7 +489,15 @@ export default class SimpleBibleFetcherPlugin extends Plugin {
       this.settings.noteOpen === "tab"
         ? this.app.workspace.getLeaf("tab")
         : this.app.workspace.getLeaf("split", "vertical");
-    await leaf.openFile(file);
+    await leaf.openFile(file, this.editorState(content));
+  }
+
+  private editorState(content: string): OpenViewState | undefined {
+    if (!content) return undefined;
+    const lines = content.split("\n");
+    const line = lines.length - 1;
+    const cursor = { line, ch: lines[line].length };
+    return { eState: { cursor: { from: cursor, to: cursor } } };
   }
 
   private openNoteOnClick(event: MouseEvent): void {
@@ -708,6 +760,45 @@ class SimpleBibleFetcherSettingTab extends PluginSettingTab {
             options[name] = name;
             return options;
           }, {}),
+        },
+      },
+      {
+        name: "Note color picker",
+        desc: "How the color is chosen when creating an annotation note: a dropdown, or a palette of swatches.",
+        control: {
+          type: "dropdown",
+          key: "noteColorPicker",
+          options: {
+            dropdown: "Dropdown",
+            palette: "Palette",
+          },
+        },
+      },
+      {
+        name: "Date in annotation notes",
+        desc: "Write a date line at the top of newly created annotation notes.",
+        control: { type: "toggle", key: "noteDate" },
+      },
+      {
+        name: "Date line",
+        desc: "Text placed in a new annotation note. Use {date} and {time}, optionally with a pattern like {date:DD.MM.YYYY}. Tokens: YYYY, YY, MM, M, DD, D, HH, H, mm, m, ss, s.",
+        visible: () => this.plugin.settings.noteDate,
+        control: {
+          type: "text",
+          key: "noteDateFormat",
+          placeholder: "{date}",
+        },
+      },
+      {
+        name: "Note link style",
+        desc: "How the annotation note appears under the verse: an embedded note (![[...]]), or a plain link ([[...]]).",
+        control: {
+          type: "dropdown",
+          key: "noteLink",
+          options: {
+            embed: "Embedded ![[...]]",
+            link: "Link [[...]]",
+          },
         },
       },
     ];

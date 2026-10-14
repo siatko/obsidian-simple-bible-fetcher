@@ -6,10 +6,12 @@ import {
   fetchBibleQuotes,
   listLanguages,
   listTranslations,
+  formatNoteDate,
   needsNoteTitle,
   parseReference,
   parseVerseContexts,
   QuoteStyle,
+  renderNoteContent,
   renderNotePath,
   searchBible,
   setBibleCache,
@@ -318,6 +320,47 @@ describe("renderNotePath", () => {
     expect(renderNotePath("Notes/{title}", context, "Gottes Liebe")).toBe(
       "Notes/Gottes Liebe"
     );
+  });
+});
+
+describe("renderNoteContent", () => {
+  const date = new Date(2026, 9, 14, 20, 15, 9);
+
+  it("fills the date and time placeholders", () => {
+    expect(renderNoteContent("{date} {time}", date)).toBe("2026-10-14 20:15");
+  });
+
+  it("applies a custom pattern around literal text", () => {
+    expect(renderNoteContent("Erstellt am {date:DD.MM.YYYY}", date)).toBe(
+      "Erstellt am 14.10.2026"
+    );
+  });
+
+  it("falls back to a default pattern for a blank pattern", () => {
+    expect(renderNoteContent("{date:}", date)).toBe("2026-10-14");
+    expect(renderNoteContent("{time:}", date)).toBe("20:15");
+  });
+
+  it("leaves text without placeholders untouched", () => {
+    expect(renderNoteContent("hallo", date)).toBe("hallo");
+  });
+});
+
+describe("formatNoteDate", () => {
+  const date = new Date(2026, 0, 4, 5, 6, 7);
+
+  it("pads the padded tokens", () => {
+    expect(formatNoteDate(date, "YYYY-MM-DD HH:mm:ss")).toBe(
+      "2026-01-04 05:06:07"
+    );
+  });
+
+  it("uses unpadded tokens and the two digit year", () => {
+    expect(formatNoteDate(date, "YY M D H m s")).toBe("26 1 4 5 6 7");
+  });
+
+  it("keeps unknown characters literal", () => {
+    expect(formatNoteDate(date, "Tag: DD!")).toBe("Tag: 04!");
   });
 });
 

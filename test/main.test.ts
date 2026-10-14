@@ -187,6 +187,23 @@ describe("plugin surface", () => {
     expect(byName("Default note color")?.control?.key).toBe(
       "noteDefaultColor"
     );
+    expect(byName("Note color picker")?.control?.key).toBe("noteColorPicker");
+    expect(byName("Date in annotation notes")?.control?.key).toBe("noteDate");
+    expect(byName("Date line")?.control?.key).toBe("noteDateFormat");
+    expect(byName("Note link style")?.control?.key).toBe("noteLink");
+  });
+
+  it("reveals the date line only when the date is enabled", () => {
+    const defs = plugin.settingTabs[0].getSettingDefinitions() as Array<{
+      name?: string;
+      visible?: () => boolean;
+    }>;
+    const dateLine = defs.find((d) => d.name === "Date line");
+
+    plugin.settings.noteDate = true;
+    expect(dateLine?.visible?.()).toBe(true);
+    plugin.settings.noteDate = false;
+    expect(dateLine?.visible?.()).toBe(false);
   });
 
   it("shows the template settings only for the custom format", () => {
@@ -557,6 +574,13 @@ function annotateSelect(): HTMLSelectElement {
   return modal?.contentEl.querySelector("select") as HTMLSelectElement;
 }
 
+function annotateSwatches(): HTMLElement[] {
+  const modal = Modal.instances.at(-1);
+  return Array.from(
+    modal?.contentEl.querySelectorAll(".simple-bible-fetcher-swatch") ?? []
+  );
+}
+
 function annotateButton(): HTMLButtonElement {
   const modal = Modal.instances.at(-1);
   return modal?.contentEl.querySelector("button") as HTMLButtonElement;
@@ -672,6 +696,140 @@ describe("annotate command", () => {
     await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalled());
     expect(editor.replaceRange.mock.calls[0][0]).toContain(
       "> [!zettel-blue]"
+    );
+  });
+
+  it("renders a color palette and submits the clicked swatch", async () => {
+    useApi();
+    const plugin = await loadPlugin({
+      noteFolder: "Bible Notes",
+      noteFormat: "{title}",
+      noteColorPicker: "palette",
+    });
+    const editor = verseEditor(chapter, 2);
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+    const modal = Modal.instances.at(-1);
+    expect(modal?.contentEl.querySelector("select")).toBeNull();
+    const swatches = annotateSwatches();
+    expect(swatches).toHaveLength(10);
+    expect(swatches[0].classList.contains("is-selected")).toBe(true);
+
+    const blue = swatches.find(
+      (swatch) => swatch.getAttribute("data-color") === "blue"
+    ) as HTMLElement;
+    blue.click();
+    expect(blue.classList.contains("is-selected")).toBe(true);
+    expect(swatches[0].classList.contains("is-selected")).toBe(false);
+
+    annotateInput().value = "Palette";
+    pressEnter(annotateInput());
+
+    await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalled());
+    expect(editor.replaceRange.mock.calls[0][0]).toContain("> [!zettel-blue]");
+  });
+
+  it("writes the configured date line into a new note", async () => {
+    useApi();
+    const plugin = await loadPlugin({
+      noteFolder: "Bible Notes",
+      noteFormat: "{title}",
+      noteDate: true,
+      noteDateFormat: "Erstellt am {date:DD.MM.YYYY}",
+    });
+    const editor = verseEditor(chapter, 2);
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+    annotateInput().value = "Datiert";
+    pressEnter(annotateInput());
+
+    await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalled());
+    const stored =
+      stubApp(plugin).vault.files.get("Bible Notes/Datiert.md") ?? "";
+    expect(stored).toMatch(/^Erstellt am \d{2}\.\d{2}\.\d{4}$/);
+  });
+
+  it("places the cursor after the date line", async () => {
+    useApi();
+    const plugin = await loadPlugin({
+      noteFolder: "Bible Notes",
+      noteFormat: "{title}",
+      noteDate: true,
+      noteDateFormat: "{date}",
+    });
+    const editor = verseEditor(chapter, 2);
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+    annotateInput().value = "Cursor";
+    pressEnter(annotateInput());
+
+    await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalled());
+    const app = stubApp(plugin);
+    const content = app.vault.files.get("Bible Notes/Cursor.md") ?? "";
+    expect(content).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(app.workspace.openedFiles.at(-1)?.state).toEqual({
+      eState: {
+        cursor: {
+          from: { line: 0, ch: content.length },
+          to: { line: 0, ch: content.length },
+        },
+      },
+    });
+  });
+
+  it("falls back to the default date format when blank", async () => {
+    useApi();
+    const plugin = await loadPlugin({
+      noteFolder: "Bible Notes",
+      noteFormat: "{title}",
+      noteDate: true,
+      noteDateFormat: "  ",
+    });
+    const editor = verseEditor(chapter, 2);
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+    annotateInput().value = "FallbackDate";
+    pressEnter(annotateInput());
+
+    await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalled());
+    const stored =
+      stubApp(plugin).vault.files.get("Bible Notes/FallbackDate.md") ?? "";
+    expect(stored).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("leaves the date out of the note by default", async () => {
+    useApi();
+    const plugin = await loadPlugin({
+      noteFolder: "Bible Notes",
+      noteFormat: "{title}",
+    });
+    const editor = verseEditor(chapter, 2);
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+    annotateInput().value = "OhneDatum";
+    pressEnter(annotateInput());
+
+    await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalled());
+    expect(stubApp(plugin).vault.files.get("Bible Notes/OhneDatum.md")).toBe("");
+  });
+
+  it("inserts a plain link when configured", async () => {
+    useApi();
+    const plugin = await loadPlugin({
+      noteFolder: "Bible Notes",
+      noteFormat: "{title}",
+      noteLink: "link",
+    });
+    const editor = verseEditor(chapter, 2);
+
+    command(plugin, "annotate-verse").editorCallback?.(editor);
+    annotateInput().value = "Verknuepft";
+    pressEnter(annotateInput());
+
+    await vi.waitFor(() => expect(editor.replaceRange).toHaveBeenCalled());
+    expect(editor.replaceRange).toHaveBeenCalledWith(
+      "\n\n> [!zettel-yellow]\n> [[Bible Notes/Verknuepft]]\n",
+      { line: 2, ch: 43 }
     );
   });
 

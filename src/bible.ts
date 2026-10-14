@@ -36,11 +36,19 @@ export interface BibleSettings {
   noteOpen: NoteOpen;
   noteClick: NoteClick;
   noteDefaultColor: string;
+  noteColorPicker: NoteColorPicker;
+  noteDate: boolean;
+  noteDateFormat: string;
+  noteLink: NoteLink;
 }
 
 export type NoteOpen = "split" | "tab" | "none";
 
 export type NoteClick = "current" | "split" | "tab" | "none";
+
+export type NoteColorPicker = "dropdown" | "palette";
+
+export type NoteLink = "embed" | "link";
 
 export const DEFAULT_TEMPLATE = "> {heading}\n>\n{verses}";
 export const DEFAULT_VERSE_TEMPLATE = "> **{number}** {text}";
@@ -49,6 +57,10 @@ export const DEFAULT_NOTE_FOLDER = "Bible Notes";
 export const DEFAULT_NOTE_FORMAT = "{title}";
 export const DEFAULT_NOTE_OPEN: NoteOpen = "split";
 export const DEFAULT_NOTE_CLICK: NoteClick = "current";
+export const DEFAULT_NOTE_COLOR_PICKER: NoteColorPicker = "dropdown";
+export const DEFAULT_NOTE_DATE = false;
+export const DEFAULT_NOTE_DATE_FORMAT = "{date}";
+export const DEFAULT_NOTE_LINK: NoteLink = "embed";
 export const NOTE_COLORS = [
   "yellow",
   "orange",
@@ -78,6 +90,10 @@ export const DEFAULT_SETTINGS: BibleSettings = {
   noteOpen: DEFAULT_NOTE_OPEN,
   noteClick: DEFAULT_NOTE_CLICK,
   noteDefaultColor: DEFAULT_NOTE_COLOR,
+  noteColorPicker: DEFAULT_NOTE_COLOR_PICKER,
+  noteDate: DEFAULT_NOTE_DATE,
+  noteDateFormat: DEFAULT_NOTE_DATE_FORMAT,
+  noteLink: DEFAULT_NOTE_LINK,
 };
 
 const API_BASE = "https://bolls.life";
@@ -528,6 +544,40 @@ export function parseVerseContexts(
 
 export function needsNoteTitle(template: string): boolean {
   return template.includes("{title}");
+}
+
+const DATE_TOKENS = /YYYY|YY|MM|M|DD|D|HH|H|mm|m|ss|s/g;
+
+function pad(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+export function formatNoteDate(date: Date, pattern: string): string {
+  const tokens: Record<string, string> = {
+    YYYY: String(date.getFullYear()),
+    YY: pad(date.getFullYear() % 100),
+    MM: pad(date.getMonth() + 1),
+    M: String(date.getMonth() + 1),
+    DD: pad(date.getDate()),
+    D: String(date.getDate()),
+    HH: pad(date.getHours()),
+    H: String(date.getHours()),
+    mm: pad(date.getMinutes()),
+    m: String(date.getMinutes()),
+    ss: pad(date.getSeconds()),
+    s: String(date.getSeconds()),
+  };
+  return pattern.replace(DATE_TOKENS, (token) => tokens[token]);
+}
+
+export function renderNoteContent(template: string, date: Date): string {
+  return template.replace(
+    /\{(date|time)(?::([^}]*))?\}/g,
+    (_match, kind: string, pattern?: string) => {
+      const fallback = kind === "date" ? "YYYY-MM-DD" : "HH:mm";
+      return formatNoteDate(date, pattern?.trim() ? pattern : fallback);
+    }
+  );
 }
 
 export function renderNotePath(

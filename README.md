@@ -80,7 +80,8 @@ under the quote as a colour-coded callout:
 - Three preset output formats, a custom template, and an optional source link.
 - Keyword search across a translation, inserting the passage you pick.
 - Annotate a verse: create a separate note for your thoughts and embed it
-  under the verse.
+  under the verse, as a callout with a colour chosen from a dropdown or a
+  palette, optionally with a date line, and as an embed or a plain link.
 - Parallel translations: the main translation plus any number of additional
   translations at once.
 - Every language offered by bolls.life, with the translation list and
@@ -176,6 +177,10 @@ The raw bolls.life text is normalized before it is inserted:
 | Note opens            | Where a new annotation note opens: `Split right` (default), `New tab`, or `Do not open`. |
 | Note opens on click   | Where an embedded annotation note opens when you click it: `Current pane` (default, Obsidian's own behaviour), `Split right`, `New tab`, or `Do not open`. |
 | Default note color    | Colour preselected when creating an annotation note. One of the ten built-in post-it colours. |
+| Note color picker     | How the colour is chosen when creating a note: a `Dropdown` (default) or a `Palette` of swatches. |
+| Date in annotation notes | Write a date line at the top of newly created annotation notes. |
+| Date line             | The date line's template. Use `{date}` and `{time}`, optionally with a pattern (`{date:DD.MM.YYYY}`); surrounding text is kept literally. Patterns use `YYYY`, `YY`, `MM`, `M`, `DD`, `D`, `HH`, `H`, `mm`, `m`, `ss`, `s`. Shown only when the date is enabled. |
+| Note link style       | How the annotation note appears under the verse: `Embedded` (default, `![[...]]`) or `Link` (`[[...]]`). |
 
 ## Custom template
 
@@ -225,12 +230,20 @@ selection over both.
 ```
 
 The note is embedded inside a `zettel-<color>` callout, drawn as a post-it with
-an always-visible coloured border. When you create a note, the dialog offers a
-dropdown of the ten built-in colours and preselects the **Default note color**:
+an always-visible coloured border. When you create a note, the dialog offers the
+ten built-in colours and preselects the **Default note color**:
 `yellow`, `orange`, `red`, `green`, `teal`, `blue`, `purple`, `pink`, `gray` and
-`brown`. Each is defined in `styles.css`, so to use your own colours override
-them in a CSS snippet, for example:
+`brown`. The **Note color picker** setting switches between a dropdown and a
+palette of swatches. To present the note as a plain `[[...]]` link instead of an
+embedded `![[...]]` note, set **Note link style** to `Link`.
+
+Each colour is defined in `styles.css` as a variable, so to use your own colours
+override them in a CSS snippet, either the variable or the callout itself:
 `body .callout[data-callout="zettel-yellow"] { --callout-color: 212, 160, 23; }`.
+With **Date in annotation notes** enabled, every new note starts with the
+**Date line**, for example `Erstellt am {date:DD.MM.YYYY}`, so you know when you
+wrote the annotation. When the note opens, the cursor is placed right after the
+date line, ready for you to type.
 
 Where the note goes is set by two settings, like the Daily Notes plugin. The
 **Note folder** field has the same vault-folder autocomplete (blank means the
@@ -243,7 +256,8 @@ format is `{title}`. When it contains `{title}` the command asks for a title
 note is named from the format.
 
 The quote stays a quote; the embedded note is your commentary and is created
-empty, so you just write. The reference already shows as the note title. The note
+empty (unless a **Date line** is configured), so you just write. The reference
+already shows as the note title. The note
 opens right away, by default in a split to the right (the **Note opens** setting
 switches between split, new tab or not at all). Clicking the embedded note can
 open it in a split or a new tab too, via the **Note opens on click** setting

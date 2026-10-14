@@ -69,7 +69,12 @@ export class StubVault {
 export class StubWorkspace {
   opened: Array<{ link: string; source: string; newLeaf: string | boolean }> =
     [];
-  openedFiles: Array<{ path: string; mode: string; direction?: string }> = [];
+  openedFiles: Array<{
+    path: string;
+    mode: string;
+    direction?: string;
+    state?: unknown;
+  }> = [];
   activeFile: { path: string } | null = null;
 
   getActiveFile(): { path: string } | null {
@@ -87,11 +92,16 @@ export class StubWorkspace {
   getLeaf(
     type?: string,
     direction?: string
-  ): { openFile: (file: { path: string }) => Promise<void> } {
+  ): { openFile: (file: { path: string }, state?: unknown) => Promise<void> } {
     const openedFiles = this.openedFiles;
     return {
-      async openFile(file: { path: string }): Promise<void> {
-        openedFiles.push({ path: file.path, mode: type ?? "default", direction });
+      async openFile(file: { path: string }, state?: unknown): Promise<void> {
+        openedFiles.push({
+          path: file.path,
+          mode: type ?? "default",
+          direction,
+          state,
+        });
       },
     };
   }
